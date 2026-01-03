@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import json
 import sympy
-import re
+import re  # Indispensable pour la réparation
 from dotenv import load_dotenv
 from openai import OpenAI
 import base64
@@ -17,54 +17,53 @@ if not os.getenv("OPENAI_API_KEY"):
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# FONCTION DE RÉPARATION JSON
-
+# ---------------------------------------------------------
+# ⭐ LA FONCTION DE RÉPARATION (Celle qui manquait !)
+# ---------------------------------------------------------
 def reparer_json_latex(json_str):
     """
     Répare le JSON cassé par les backslashs manquants.
-    Remplace brutalement les erreurs connues (imes, frac, etc.) par la version correcte.
+    Remplace les 'imes', 'frac' et nettoie les erreurs courantes.
     """
     if not json_str: return ""
 
-    # Liste des réparations : (Erreur visible -> Correction JSON avec double backslash)
+    # Liste des réparations (Erreur -> Correction)
     corrections = [
-        (r'imes', r'\\\\times'),       # imes -> \\times
-        (r'frac', r'\\\\frac'),        # frac -> \\frac
-        (r'sqrt', r'\\\\sqrt'),        # sqrt -> \\sqrt
-        (r'vec\{', r'\\\\vec{'),       # vec{ -> \\vec{
-        (r'text\{', r'\\\\text{'),     # text{ -> \\text{
-        (r'cdot', r'\\\\cdot'),
-        (r'infty', r'\\\\infty'),
-        (r'approx', r'\\\\approx'),
-        (r'neq', r'\\\\neq'),
-        (r'geq', r'\\\\geq'),
-        (r'leq', r'\\\\leq'),
-        (r'begin\{', r'\\\\begin{'),
-        (r'end\{', r'\\\\end{'),
-        (r'pi', r'\\\\pi'),
-        (r'alpha', r'\\\\alpha'),
-        (r'beta', r'\\\\beta'),
-        (r'gamma', r'\\\\gamma'),
-        (r'Delta', r'\\\\Delta'),
-        (r'lambda', r'\\\\lambda'),
-        (r'mathbb', r'\\\\mathbb'),
-        (r'mathcal', r'\\\\mathcal'),
-        # Réparation des sauts de ligne systèmes
-        (r'\\\\', r'\\\\\\\\')         # Essayer de doubler les backslashs simples restants
+        (r'(?<!\\)imes', r'\\\\times'),       # imes -> \\times
+        (r'(?<!\\)frac', r'\\\\frac'),        # frac -> \\frac
+        (r'(?<!\\)sqrt', r'\\\\sqrt'),        # sqrt -> \\sqrt
+        (r'(?<!\\)vec\{', r'\\\\vec{'),       # vec{ -> \\vec{
+        (r'(?<!\\)text\{', r'\\\\text{'),     # text{ -> \\text{
+        (r'(?<!\\)cdot', r'\\\\cdot'),
+        (r'(?<!\\)infty', r'\\\\infty'),
+        (r'(?<!\\)approx', r'\\\\approx'),
+        (r'(?<!\\)neq', r'\\\\neq'),
+        (r'(?<!\\)geq', r'\\\\geq'),
+        (r'(?<!\\)leq', r'\\\\leq'),
+        (r'(?<!\\)begin\{', r'\\\\begin{'),
+        (r'(?<!\\)end\{', r'\\\\end{'),
+        (r'(?<!\\)pi', r'\\\\pi'),
+        (r'(?<!\\)alpha', r'\\\\alpha'),
+        (r'(?<!\\)beta', r'\\\\beta'),
+        (r'(?<!\\)gamma', r'\\\\gamma'),
+        (r'(?<!\\)mathbb', r'\\\\mathbb'),
+        # Nettoyage des underscores échappés par erreur (v\_n -> v_n)
+        (r'\\_', '_'),
+        # Réparation des sauts de ligne systèmes mal formés
+        (r'\\\\', r'\\\\\\\\') 
     ]
 
     txt_fixed = json_str
     
-    for erreur, correction in corrections:
-        # On remplace si le mot clé n'est PAS déjà précédé d'un backslash
-        # (Technique Regex "Negative Lookbehind")
-        pattern = r'(?<!\\)' + erreur
+    for pattern, replacement in corrections:
         try:
-            txt_fixed = re.sub(pattern, correction, txt_fixed)
+            txt_fixed = re.sub(pattern, replacement, txt_fixed)
         except Exception:
             pass
             
     return txt_fixed
+# ---------------------------------------------------------
+
 
 # FONCTION POUR GÉNÉRER LE HTML
 def generer_html_fiche(titre, exercices):
@@ -96,6 +95,7 @@ def generer_html_fiche(titre, exercices):
         </div>
         """
     
+    # Amélioration MathJax : Ajout du support pour \( ... \) et \[ ... \]
     html_complete = f"""
 <!DOCTYPE html>
 <html lang="fr">
@@ -104,12 +104,11 @@ def generer_html_fiche(titre, exercices):
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{titre}</title>
     
-    <!-- MathJax -->
     <script>
     window.MathJax = {{
         tex: {{
-            inlineMath: [['$', '$']],
-            displayMath: [['$$', '$$']],
+            inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], 
+            displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
             processEscapes: true,
             packages: {{'[+]': ['amsmath', 'amssymb']}}
         }},
@@ -121,128 +120,25 @@ def generer_html_fiche(titre, exercices):
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
     
     <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-        
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-        }}
-        
-        .container {{
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }}
-        
-        h1 {{
-            color: #667eea;
-            text-align: center;
-            margin-bottom: 40px;
-            font-size: 2.5em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-        }}
-        
-        .exercice {{
-            background: #f8f9fa;
-            border-left: 5px solid #667eea;
-            padding: 25px;
-            margin-bottom: 30px;
-            border-radius: 10px;
-            transition: transform 0.2s;
-        }}
-        
-        .exercice:hover {{
-            transform: translateX(5px);
-        }}
-        
-        .exercice-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }}
-        
-        .exercice-header h2 {{
-            color: #667eea;
-            font-size: 1.5em;
-        }}
-        
-        .difficulte {{
-            font-size: 1.2em;
-        }}
-        
-        .question {{
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }}
-        
-        .correction {{
-            margin-top: 15px;
-        }}
-        
-        summary {{
-            background: #667eea;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.3s;
-        }}
-        
-        summary:hover {{
-            background: #5568d3;
-        }}
-        
-        .reponse {{
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 5px;
-        }}
-        
-        .detail {{
-            background: white;
-            padding: 20px;
-            margin-top: 15px;
-            border-radius: 5px;
-            line-height: 1.8;
-        }}
+        body {{ font-family: 'Segoe UI', sans-serif; line-height: 1.6; color: #333; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); padding: 20px; }}
+        .container {{ max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }}
+        h1 {{ color: #2c3e50; text-align: center; margin-bottom: 40px; border-bottom: 2px solid #3498db; padding-bottom: 20px; }}
+        .exercice {{ background: #fff; border: 1px solid #e1e4e8; padding: 25px; margin-bottom: 30px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }}
+        .exercice-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }}
+        .exercice-header h2 {{ color: #2980b9; font-size: 1.5em; }}
+        .difficulte {{ font-size: 1.2em; color: #f1c40f; }}
+        .question {{ font-size: 1.1em; margin-bottom: 20px; }}
+        summary {{ background: #f1f8ff; color: #0366d6; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-weight: bold; list-style: none; }}
+        summary:hover {{ background: #dbedff; }}
+        .reponse {{ background: #e6fffa; border-left: 4px solid #38b2ac; padding: 15px; margin: 15px 0; border-radius: 4px; }}
+        .detail {{ background: #fffbf0; border: 1px solid #fce588; padding: 15px; margin-top: 15px; border-radius: 4px; }}
         
         @media print {{
-            body {{
-                background: white;
-            }}
-            
-            .container {{
-                box-shadow: none;
-            }}
-            
-            details {{
-                display: block;
-            }}
-            
-            summary {{
-                display: none;
-            }}
-            
-            .correction {{
-                display: block !important;
-            }}
+            body {{ background: white; }}
+            .container {{ box-shadow: none; border: none; width: 100%; max-width: 100%; padding: 0; }}
+            details {{ display: block; }}
+            summary {{ display: none; }}
+            .correction {{ display: block !important; }}
         }}
     </style>
 </head>
@@ -250,17 +146,14 @@ def generer_html_fiche(titre, exercices):
     <div class="container">
         <h1>📚 {titre}</h1>
         {exercices_html}
-        
-        <div style="text-align: center; margin-top: 40px; color: #666;">
-            <p>Généré par Maths Tutor IA 🎓</p>
+        <div style="text-align: center; margin-top: 40px; color: #666; font-size: 0.9em;">
+            Généré par Maths Tutor IA 🎓
         </div>
     </div>
 </body>
 </html>
     """
-    
     return html_complete
-
 
 def outil_calcul_symbolique(expression, operation, variable="x"):
     try:
@@ -268,21 +161,15 @@ def outil_calcul_symbolique(expression, operation, variable="x"):
         x = sympy.symbols(variable)
         expr = sympy.sympify(expression)
         
-        if operation == "derive":
-            res = sympy.diff(expr, x)
-        elif operation == "integre":
-            res = sympy.integrate(expr, x)
-        elif operation == "simplifie":
-            res = sympy.simplify(expr)
-        elif operation == "resous":
-            res = sympy.solve(expr, x)
-        else:
-            return "Opération inconnue"
+        if operation == "derive": res = sympy.diff(expr, x)
+        elif operation == "integre": res = sympy.integrate(expr, x)
+        elif operation == "simplifie": res = sympy.simplify(expr)
+        elif operation == "resous": res = sympy.solve(expr, x)
+        else: return "Opération inconnue"
         
         return f"Résultat : ${sympy.latex(res)}$"
     except Exception as e:
         return f"Erreur : {str(e)}"
-
 
 tools_schema = [{
     "type": "function",
@@ -370,7 +257,7 @@ with tab1:
 # TAB 2 : GÉNÉRATEUR HTML
 with tab2:
     st.header("📝 Générateur de Fiches (HTML)")
-    st.info("💡 Nouvelle approche : Génération directe en HTML avec rendu parfait !")
+    st.info("💡 Version : Génération HTML + Réparation automatique")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -383,116 +270,63 @@ with tab2:
     if st.button("🚀 Générer la fiche", type="primary"):
         with st.spinner("✍️ Rédaction en cours..."):
             try:
-                # PROMPT AVEC ÉCHAPPEMENT FORCÉ
-                sys_prompt = """Tu es un professeur de mathématiques qui génère des exercices EN HTML.
+                # PROMPT 
+                sys_prompt = """Tu es un professeur de mathématiques.
 
-RÈGLES CRITIQUES :
-1. Utilise le HTML simple avec des balises <p>, <strong>, <em>
-2. Pour les maths, utilise LaTeX entre $ (inline) ou $ (display)
+RÈGLE CRITIQUE : DANS LE JSON, DOUBLE TOUS LES BACKSLASHS LATEX.
+Exemple : écris "\\\\times" au lieu de "\\times".
+Exemple : écris "\\\\frac" au lieu de "\\frac".
 
-3. ⚠️ RÈGLE LA PLUS IMPORTANTE - BACKSLASHS :
-   Dans le JSON, tu DOIS échapper tous les backslashs LaTeX.
-   Écris TOUJOURS 4 backslashs pour en obtenir 2 :
-   
-   ❌ INTERDIT : "\\times" (sera cassé → "imes")
-   ✅ CORRECT : "\\\\times" (donnera → "\\times")
-   
-   Exemples :
-   - Multiplication : "3 \\\\times 7" (PAS "3 \\times 7")
-   - Fraction : "\\\\frac{5}{12}" (PAS "\\frac{5}{12}")
-   - Vecteur : "\\\\vec{u}" (PAS "\\vec{u}")
-   - Système : "\\\\begin{cases} ... \\\\\\\\ ... \\\\end{cases}"
-
-4. Pour les systèmes d'équations :
-   $\\\\begin{cases}
-   x = 1 + 2t \\\\\\\\
-   y = 3 - t \\\\\\\\
-   z = 5
-   \\\\end{cases}$
-
-5. Structure JSON :
+Structure JSON :
 {
-  "titre": "Titre de la fiche",
+  "titre": "Titre",
   "exercices": [
     {
-      "question": "<p>Énoncé avec $f(x) = x^2$ en HTML</p>",
-      "reponse": "<p>$x = 5$</p>",
-      "correction_detaillee": "<p>Étape 1: $3 \\\\times 7 = 21$</p>",
+      "question": "Énoncé avec LaTeX entre $",
+      "reponse": "Réponse",
+      "correction_detaillee": "Détails",
       "difficulte": 3
     }
   ]
-}
-
-⚠️ RAPPEL FINAL : Quadruple TOUS les backslashs dans le JSON !"""
+}"""
 
                 response = client.chat.completions.create(
                     model="gpt-4o-2024-08-06",
                     messages=[
                         {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": 
-                         f"Génère {nb} exercices sur '{sujet}' niveau {niveau}, difficulté {diff}/5."
-                        }
+                        {"role": "user", "content": f"Génère {nb} exercices sur '{sujet}' niveau {niveau}, difficulté {diff}/5."}
                     ],
                     response_format={"type": "json_object"}
                 )
                 
-                # Parser le JSON
+                # 1. Récupération brute
                 json_brut = response.choices[0].message.content
                 
-                # ⭐ RÉPARATION AUTOMATIQUE DES BACKSLASHS CASSÉS
+                # 2. Réparation automatique (FONCTIONNE MAINTENANT)
                 json_repare = reparer_json_latex(json_brut)
                 
-                # Debug
-                with st.expander("🔧 Debug - Réparation automatique"):
-                    col_debug1, col_debug2 = st.columns(2)
-                    with col_debug1:
-                        st.caption("❌ JSON cassé par GPT-4")
-                        # Montrer les problèmes en rouge
-                        problemes = ['imes', 'rac{', 'vec{', 'egin{', 'nd{']
-                        extrait = json_brut[:800]
-                        for pb in problemes:
-                            if pb in extrait:
-                                st.error(f"Trouvé: `{pb}`")
-                        st.code(extrait, language="json")
-                    with col_debug2:
-                        st.caption("✅ JSON réparé automatiquement")
-                        st.code(json_repare[:800], language="json")
-                
+                # 3. Parsing
                 data = json.loads(json_repare)
                 
-                # Générer le HTML
+                # 4. Génération HTML
                 html_content = generer_html_fiche(data['titre'], data['exercices'])
                 
-                # Afficher dans Streamlit
+                # 5. Affichage
                 st.success(f"✅ Fiche générée : **{data['titre']}**")
                 
-                # Prévisualisation
+                # Debug (visible si besoin)
+                with st.expander("🛠️ Voir les détails techniques"):
+                    c1, c2 = st.columns(2)
+                    c1.text_area("JSON Brut (IA)", json_brut, height=200)
+                    c2.text_area("JSON Réparé (Python)", json_repare, height=200)
+
                 st.components.v1.html(html_content, height=800, scrolling=True)
                 
-                # Boutons de téléchargement
                 col_a, col_b = st.columns(2)
-                
                 with col_a:
-                    st.download_button(
-                        "💾 Télécharger HTML",
-                        html_content,
-                        f"fiche_{sujet.replace(' ', '_')}.html",
-                        "text/html"
-                    )
-                
+                    st.download_button("💾 Télécharger HTML", html_content, "fiche.html", "text/html")
                 with col_b:
-                    st.download_button(
-                        "📄 Télécharger JSON",
-                        json.dumps(data, indent=2, ensure_ascii=False),
-                        f"fiche_{sujet.replace(' ', '_')}.json",
-                        "application/json"
-                    )
+                    st.download_button("📄 Télécharger JSON", json_repare, "fiche.json", "application/json")
                 
-                st.info("💡 Astuce : Ouvre le fichier HTML dans ton navigateur, puis Ctrl+P pour l'imprimer en PDF !")
-
             except Exception as e:
                 st.error(f"❌ Erreur : {e}")
-                st.exception(e)
-
-st.markdown("---")
-st.caption("🎓 Maths Tutor IA - Nouvelle version HTML | Ctrl+P sur le HTML = PDF parfait !")

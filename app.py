@@ -2,13 +2,11 @@ import streamlit as st
 import os
 import json
 import sympy
-import re
 from dotenv import load_dotenv
 from openai import OpenAI
-from pydantic import BaseModel, Field
+import base64
 
-# 1. CONFIGURATION
-# ------------------------------------------------------------------
+# CONFIGURATION
 load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
@@ -18,103 +16,200 @@ if not os.getenv("OPENAI_API_KEY"):
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 2. MODÈLES DE DONNÉES
-# ------------------------------------------------------------------
-class ExerciceMaths(BaseModel):
-    question: str
-    reponse: str
-    correction_detaillee: str
-    difficulte: int
-
-class FicheTD(BaseModel):
-    titre: str
-    exercices: list[ExerciceMaths]
-
-# 3. ⭐ RÉPARATION JSON (LA FONCTION MAGIQUE)
-# ------------------------------------------------------------------
-def reparer_json_latex(json_str):
-    """
-    Double les backslashs LaTeX dans le JSON avant parsing
-    tout en préservant les échappements JSON légitimes
-    """
-    # Échappements JSON à préserver
-    json_escapes = {
-        r'\"': '§§QUOTE§§',
-        r'\\': '§§BACKSLASH§§',
-        r'\/': '§§SLASH§§',
-        r'\b': '§§BACKSPACE§§',
-        r'\f': '§§FORMFEED§§',
-        r'\n': '§§NEWLINE§§',
-        r'\r': '§§RETURN§§',
-        r'\t': '§§TAB§§'
-    }
+# FONCTION POUR GÉNÉRER LE HTML
+def generer_html_fiche(titre, exercices):
+    """Génère un HTML complet avec MathJax pour les exercices"""
     
-    # Remplacer temporairement les vrais échappements JSON
-    for escape, placeholder in json_escapes.items():
-        json_str = json_str.replace(escape, placeholder)
-    
-    # Maintenant tous les \ restants sont du LaTeX cassé
-    # On les double : \ → \\
-    json_str = json_str.replace('\\', '\\\\')
-    
-    # Restaurer les vrais échappements JSON
-    for escape, placeholder in json_escapes.items():
-        json_str = json_str.replace(placeholder, escape)
-    
-    return json_str
-
-# 4. ⭐ NETTOYAGE LATEX (POUR LE RENDU NATIF STREAMLIT)
-# ------------------------------------------------------------------
-def nettoyer_latex(text):
-    """
-    Prépare le LaTeX pour le rendu natif de Streamlit
-    """
-    if not text:
-        return ""
-    
-    # 1. Supprimer les $ en trop ($$$ → $$)
-    text = re.sub(r'\$\$\$+', '$$', text)
-    text = re.sub(r'\$\$\s*\$\$', '', text)
-    
-    # 2. Forcer les environments dans des $$ si nécessaire
-    def wrap_environment(match):
-        content = match.group(0)
-        # Si pas déjà dans $$, on entoure
-        if not re.search(r'\$\$.*?' + re.escape(content), text):
-            return f'$${content}$$'
-        return content
-    
-    # Détecter les environments courants
-    for env in ['cases', 'align', 'equation', 'matrix']:
-        pattern = rf'\\begin\{{{env}\}}.*?\\end\{{{env}\}}'
-        matches = re.finditer(pattern, text, flags=re.DOTALL)
-        for match in matches:
-            content = match.group(0)
-            # Vérifier si déjà entouré
-            start = match.start()
-            end = match.end()
-            before = text[max(0, start-2):start]
-            after = text[end:min(len(text), end+2)]
+    exercices_html = ""
+    for i, exo in enumerate(exercices, 1):
+        exercices_html += f"""
+        <div class="exercice">
+            <div class="exercice-header">
+                <h2>📝 Exercice {i}</h2>
+                <span class="difficulte">{'⭐' * exo['difficulte']}</span>
+            </div>
             
-            if before != '$$' and after != '$$':
-                text = text[:start] + f'$${content}$$' + text[end:]
+            <div class="question">
+                {exo['question']}
+            </div>
+            
+            <details class="correction">
+                <summary>📖 Voir la correction</summary>
+                <div class="reponse">
+                    <strong>Réponse finale :</strong> {exo['reponse']}
+                </div>
+                <div class="detail">
+                    <strong>Démonstration détaillée :</strong><br>
+                    {exo['correction_detaillee']}
+                </div>
+            </details>
+        </div>
+        """
     
-    # 3. Nettoyer les commandes de formatage PDF
-    text = text.replace(r'\newline', '\n\n')
+    html_complete = f"""
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{titre}</title>
     
-    # 4. Convertir LaTeX text en Markdown
-    text = re.sub(r'\\textbf\{(.*?)\}', r'**\1**', text)
-    text = re.sub(r'\\textit\{(.*?)\}', r'*\1*', text)
+    <!-- MathJax -->
+    <script>
+    window.MathJax = {{
+        tex: {{
+            inlineMath: [['$', '$']],
+            displayMath: [['$$', '$$']],
+            processEscapes: true,
+            packages: {{'[+]': ['amsmath', 'amssymb']}}
+        }},
+        svg: {{
+            fontCache: 'global'
+        }}
+    }};
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
     
-    # 5. Nettoyer les espaces autour des délimiteurs
-    text = re.sub(r'\$\s+', '$', text)
-    text = re.sub(r'\s+\$', '$', text)
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        
+        body {{
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }}
+        
+        .container {{
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }}
+        
+        h1 {{
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }}
+        
+        .exercice {{
+            background: #f8f9fa;
+            border-left: 5px solid #667eea;
+            padding: 25px;
+            margin-bottom: 30px;
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }}
+        
+        .exercice:hover {{
+            transform: translateX(5px);
+        }}
+        
+        .exercice-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        
+        .exercice-header h2 {{
+            color: #667eea;
+            font-size: 1.5em;
+        }}
+        
+        .difficulte {{
+            font-size: 1.2em;
+        }}
+        
+        .question {{
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 1.1em;
+        }}
+        
+        .correction {{
+            margin-top: 15px;
+        }}
+        
+        summary {{
+            background: #667eea;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }}
+        
+        summary:hover {{
+            background: #5568d3;
+        }}
+        
+        .reponse {{
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }}
+        
+        .detail {{
+            background: white;
+            padding: 20px;
+            margin-top: 15px;
+            border-radius: 5px;
+            line-height: 1.8;
+        }}
+        
+        @media print {{
+            body {{
+                background: white;
+            }}
+            
+            .container {{
+                box-shadow: none;
+            }}
+            
+            details {{
+                display: block;
+            }}
+            
+            summary {{
+                display: none;
+            }}
+            
+            .correction {{
+                display: block !important;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📚 {titre}</h1>
+        {exercices_html}
+        
+        <div style="text-align: center; margin-top: 40px; color: #666;">
+            <p>Généré par Maths Tutor IA 🎓</p>
+        </div>
+    </div>
+</body>
+</html>
+    """
     
-    # 6. Normaliser les délimiteurs alternatifs
-    text = re.sub(r'\\\[(.*?)\\\]', r'$$\1$$', text, flags=re.DOTALL)
-    text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
-    
-    return text
+    return html_complete
 
 
 def outil_calcul_symbolique(expression, operation, variable="x"):
@@ -156,18 +251,18 @@ tools_schema = [{
     }
 }]
 
-# 5. INTERFACE
-# ------------------------------------------------------------------
+# INTERFACE
 st.title("🎓 Plateforme Maths IA")
 
 tab1, tab2 = st.tabs(["💬 Tuteur", "📝 Générateur"])
 
+# TAB 1 : TUTEUR
 with tab1:
     st.write("Pose ta question de maths, je peux calculer avec Python.")
     
     if "messages" not in st.session_state:
         st.session_state.messages = [
-            {"role": "system", "content": "Tu es un assistant mathématique expert."}
+            {"role": "system", "content": "Tu es un assistant mathématique expert. Utilise LaTeX entre $ pour les formules."}
         ]
 
     for msg in st.session_state.messages:
@@ -176,7 +271,7 @@ with tab1:
         
         if content and role != "system":
             with st.chat_message(role):
-                st.markdown(nettoyer_latex(content))
+                st.markdown(content)
 
     if prompt := st.chat_input("Ex: Dérive ln(x²+1)"):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -186,7 +281,7 @@ with tab1:
         with st.chat_message("assistant"):
             container = st.empty()
             response = client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-4o-2024-08-06",
                 messages=st.session_state.messages,
                 tools=tools_schema
             )
@@ -211,19 +306,21 @@ with tab1:
                         })
                 
                 final = client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-4o-2024-08-06",
                     messages=st.session_state.messages
                 )
                 reply = final.choices[0].message.content
-                container.markdown(nettoyer_latex(reply))
+                container.markdown(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
             else:
                 reply = msg_obj.content
-                container.markdown(nettoyer_latex(reply))
+                container.markdown(reply)
                 st.session_state.messages.append({"role": "assistant", "content": reply})
 
+# TAB 2 : GÉNÉRATEUR HTML
 with tab2:
-    st.header("📝 Générateur de Fiches TD")
+    st.header("📝 Générateur de Fiches (HTML)")
+    st.info("💡 Nouvelle approche : Génération directe en HTML avec rendu parfait !")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -236,128 +333,81 @@ with tab2:
     if st.button("🚀 Générer la fiche", type="primary"):
         with st.spinner("✍️ Rédaction en cours..."):
             try:
-                # ⭐ PROMPT OPTIMISÉ
-                sys_prompt = """Tu es un professeur de mathématiques expérimenté.
+                # PROMPT ULTRA-SIMPLE POUR HTML
+                sys_prompt = """Tu es un professeur de mathématiques qui génère des exercices EN HTML.
 
-RÈGLES DE FORMATAGE :
-1. **Texte** : Utilise Markdown (**gras**, *italique*)
-2. **Formules mathématiques** : Entoure TOUJOURS de $ ou $$
-   - Inline : $f(x) = x^2 + 1$
-   - Display : $$\\int_0^1 x^2 dx = \\frac{1}{3}$$
-   
-3. **Systèmes d'équations** : Structure exacte à respecter
+RÈGLES :
+1. Utilise le HTML simple avec des balises <p>, <strong>, <em>
+2. Pour les maths, utilise LaTeX entre $ (inline) ou $$ (display)
+3. Pour les systèmes, utilise TOUJOURS :
    $$\\begin{cases}
    x = 1 + 2t \\\\
    y = 3 - t \\\\
-   z = 5 + 4t
+   z = 5
    \\end{cases}$$
-   
-IMPORTANT : 
-- Double TOUJOURS les backslashs : \\\\
-- Sépare les lignes des systèmes avec \\\\
-- Utilise \\frac{}{} pour les fractions, jamais /
 
-Structure JSON attendue :
+4. Réponds en JSON avec cette structure EXACTE :
 {
-  "titre": "...",
+  "titre": "Titre de la fiche",
   "exercices": [
     {
-      "question": "énoncé avec $maths$",
-      "reponse": "réponse courte avec $résultat$",
-      "correction_detaillee": "étapes détaillées",
-      "difficulte": 1-5
+      "question": "<p>Énoncé avec $f(x) = x^2$ en HTML</p>",
+      "reponse": "<p>$x = 5$</p>",
+      "correction_detaillee": "<p>Étape 1: ...</p><p>Donc $résultat$</p>",
+      "difficulte": 3
     }
   ]
-}"""
-                
-                # Appel API
+}
+
+IMPORTANT : Le contenu doit être du HTML valide avec LaTeX."""
+
                 response = client.chat.completions.create(
-                    model="gpt-4o",
+                    model="gpt-4o-2024-08-06",
                     messages=[
                         {"role": "system", "content": sys_prompt},
                         {"role": "user", "content": 
-                         f"Génère {nb} exercices sur '{sujet}' niveau {niveau}, difficulté {diff}/5. "
-                         "Réponds UNIQUEMENT en JSON valide."
+                         f"Génère {nb} exercices sur '{sujet}' niveau {niveau}, difficulté {diff}/5."
                         }
                     ],
                     response_format={"type": "json_object"}
                 )
                 
-                # ⭐ RÉCUPÉRATION + RÉPARATION JSON
-                json_brut = response.choices[0].message.content
-                json_repare = reparer_json_latex(json_brut)
+                # Parser le JSON
+                data = json.loads(response.choices[0].message.content)
                 
-                # Debug optionnel
-                with st.expander("🔧 Debug JSON (optionnel)"):
-                    col_a, col_b = st.columns(2)
-                    with col_a:
-                        st.caption("JSON brut (GPT-4)")
-                        st.code(json_brut[:400] + "...", language="json")
-                    with col_b:
-                        st.caption("JSON réparé")
-                        st.code(json_repare[:400] + "...", language="json")
+                # Générer le HTML
+                html_content = generer_html_fiche(data['titre'], data['exercices'])
                 
-                # Parsing
-                data = json.loads(json_repare)
-                fiche = FicheTD(**data)
+                # Afficher dans Streamlit
+                st.success(f"✅ Fiche générée : **{data['titre']}**")
                 
-                # Affichage
-                st.success(f"✅ **{fiche.titre}**")
-                st.markdown("---")
+                # Prévisualisation
+                st.components.v1.html(html_content, height=800, scrolling=True)
                 
-                for i, exo in enumerate(fiche.exercices, 1):
-                    with st.container():
-                        # En-tête exercice
-                        cols = st.columns([3, 1])
-                        with cols[0]:
-                            st.markdown(f"### 📝 Exercice {i}")
-                        with cols[1]:
-                            st.markdown(f"{'⭐' * exo.difficulte}")
-                        
-                        # Énoncé
-                        st.markdown(nettoyer_latex(exo.question))
-                        
-                        # Correction
-                        with st.expander("📖 Voir la correction"):
-                            st.info(f"**Réponse finale :** {nettoyer_latex(exo.reponse)}")
-                            st.markdown("**Démonstration détaillée :**")
-                            st.markdown(nettoyer_latex(exo.correction_detaillee))
-                        
-                        st.markdown("---")
+                # Boutons de téléchargement
+                col_a, col_b = st.columns(2)
                 
-                # Export
-                col_export1, col_export2 = st.columns(2)
-                with col_export1:
+                with col_a:
                     st.download_button(
-                        "💾 Télécharger (JSON)",
-                        fiche.model_dump_json(indent=2),
+                        "💾 Télécharger HTML",
+                        html_content,
+                        f"fiche_{sujet.replace(' ', '_')}.html",
+                        "text/html"
+                    )
+                
+                with col_b:
+                    st.download_button(
+                        "📄 Télécharger JSON",
+                        json.dumps(data, indent=2, ensure_ascii=False),
                         f"fiche_{sujet.replace(' ', '_')}.json",
                         "application/json"
                     )
-                with col_export2:
-                    # Export Markdown
-                    md_content = f"# {fiche.titre}\n\n"
-                    for i, exo in enumerate(fiche.exercices, 1):
-                        md_content += f"## Exercice {i} ({'⭐' * exo.difficulte})\n\n"
-                        md_content += f"{exo.question}\n\n"
-                        md_content += f"**Réponse :** {exo.reponse}\n\n"
-                        md_content += f"**Correction :**\n{exo.correction_detaillee}\n\n---\n\n"
-                    
-                    st.download_button(
-                        "📄 Télécharger (Markdown)",
-                        md_content,
-                        f"fiche_{sujet.replace(' ', '_')}.md",
-                        "text/markdown"
-                    )
+                
+                st.info("💡 Astuce : Ouvre le fichier HTML dans ton navigateur, puis Ctrl+P pour l'imprimer en PDF !")
 
-            except json.JSONDecodeError as e:
-                st.error(f"❌ Erreur de parsing JSON : {e}")
-                with st.expander("Voir le JSON problématique"):
-                    st.code(json_repare)
             except Exception as e:
                 st.error(f"❌ Erreur : {e}")
                 st.exception(e)
 
-# Footer
 st.markdown("---")
-st.caption("💡 Astuce : Pour de meilleurs résultats, sois précis dans le sujet (ex: 'Dérivées de fonctions composées' plutôt que 'Dérivées')")
+st.caption("🎓 Maths Tutor IA - Nouvelle version HTML | Ctrl+P sur le HTML = PDF parfait !")

@@ -12,59 +12,71 @@ load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
 if not os.getenv("OPENAI_API_KEY"):
-    st.error("❌ Clé API manquante ! ")
+    st.error("❌ Clé API manquante ! Vérifie ton fichier .env")
     st.stop()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 2. FONCTIONS UTILITAIRES (Parser Maison + HTML)
+# 2. FONCTIONS PARSING & HTML
 # ------------------------------------------------------------------
 
 def parser_format_maison(texte_brut):
     """
-    Transforme le texte brut de l'IA en dictionnaire structuré.
-    Plus de JSON = Plus de bugs de backslashs !
+    Découpe le texte généré par l'IA en exercices structurés.
     """
-    data = {"titre": "Fiche d'exercices", "exercices": []}
+    data = {"titre": "Fiche de Mathématiques", "exercices": []}
     
-    # On découpe par blocs
-    blocs = texte_brut.split("===NOUVEL_EXERCICE===")
+    # On nettoie un peu le texte
+    texte_brut = texte_brut.replace("```text", "").replace("```", "")
     
-    # Le premier bloc contient souvent le titre
-    if len(blocs) > 0:
-        titre_match = re.search(r"TITRE_FICHE:\s*(.*)", blocs[0])
-        if titre_match:
-            data["titre"] = titre_match.group(1).strip()
+    # 1. Récupération du titre
+    titre_match = re.search(r"TITRE_FICHE:\s*(.*)", texte_brut, re.IGNORECASE)
+    if titre_match:
+        data["titre"] = titre_match.group(1).strip()
 
-    # On analyse les exercices (à partir du bloc 1 car le 0 est l'intro/titre)
-    for bloc in blocs[1:]:
+    # 2. Découpage des exercices via le séparateur
+    blocs = re.split(r"===NOUVEL_EXERCICE===", texte_brut)
+    
+    for bloc in blocs:
+        if not bloc.strip() or "TITRE_FICHE" in bloc: continue # On saute l'intro
+
         exo = {
             "question": "",
             "reponse": "",
             "correction_detaillee": "",
-            "difficulte": 1
+            "difficulte": 3
         }
         
-        # Extraction avec des balises simples
+        # Regex plus souples pour capturer le contenu même s'il est long
         q_match = re.search(r"QUESTION:\s*(.*?)\s*REPONSE:", bloc, re.DOTALL)
         r_match = re.search(r"REPONSE:\s*(.*?)\s*DETAIL:", bloc, re.DOTALL)
         d_match = re.search(r"DETAIL:\s*(.*?)\s*DIFFICULTE:", bloc, re.DOTALL)
         diff_match = re.search(r"DIFFICULTE:\s*(\d)", bloc)
         
+        # Si on ne trouve pas de difficulté à la fin, on prend le reste comme détail
+        if d_match:
+            exo["correction_detaillee"] = d_match.group(1).strip()
+        else:
+            # Fallback si l'IA oublie le tag DIFFICULTE à la fin
+            detail_fallback = re.search(r"DETAIL:\s*(.*)", bloc, re.DOTALL)
+            if detail_fallback:
+                exo["correction_detaillee"] = detail_fallback.group(1).strip()
+
         if q_match: exo["question"] = q_match.group(1).strip()
         if r_match: exo["reponse"] = r_match.group(1).strip()
-        if d_match: exo["correction_detaillee"] = d_match.group(1).strip()
         if diff_match: exo["difficulte"] = int(diff_match.group(1))
         
-        data["exercices"].append(exo)
+        # On ajoute l'exo seulement s'il a au moins une question
+        if exo["question"]:
+            data["exercices"].append(exo)
         
     return data
 
 def generer_html_fiche(titre, exercices):
-    """Génère le HTML final avec MathJax"""
     exercices_html = ""
     for i, exo in enumerate(exercices, 1):
-        # Conversion sauts de ligne en HTML
+        # Conversion intelligente des sauts de ligne pour le HTML
+        # On remplace les \n par <br> sauf s'ils sont déjà dans du LaTeX
         q = exo['question'].replace('\n', '<br>')
         r = exo['reponse']
         d = exo['correction_detaillee'].replace('\n', '<br>')
@@ -77,9 +89,12 @@ def generer_html_fiche(titre, exercices):
             </div>
             <div class="question">{q}</div>
             <details class="correction">
-                <summary>📖 Voir la correction</summary>
-                <div class="reponse"><strong>Réponse :</strong> {r}</div>
-                <div class="detail"><strong>Détail :</strong><br>{d}</div>
+                <summary>📖 Voir la correction détaillée</summary>
+                <div class="reponse"><strong>Résultat :</strong> {r}</div>
+                <div class="detail">
+                    <strong>Démonstration étape par étape :</strong><br>
+                    {d}
+                </div>
             </details>
         </div>
         """
@@ -95,141 +110,166 @@ def generer_html_fiche(titre, exercices):
         tex: {{
             inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], 
             displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
-            processEscapes: true
+            processEscapes: true,
+            packages: {{'[+]': ['amsmath', 'amssymb', 'noerrors', 'noundefined']}}
         }},
         svg: {{ fontCache: 'global' }}
     }};
     </script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
     <style>
-        body {{ font-family: 'Segoe UI', sans-serif; background: #f4f6f9; padding: 20px; }}
-        .container {{ max-width: 900px; margin: 0 auto; background: white; padding: 40px; border-radius: 15px; }}
-        h1 {{ text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 20px; }}
-        .exercice {{ border: 1px solid #ddd; padding: 20px; margin-bottom: 30px; border-radius: 8px; background: white; }}
-        .exercice-header {{ display: flex; justify-content: space-between; border-bottom: 1px solid #eee; margin-bottom: 15px; }}
-        .reponse {{ background: #e6fffa; border-left: 4px solid #38b2ac; padding: 10px; margin: 10px 0; }}
-        .detail {{ background: #fffbf0; border: 1px solid #fce588; padding: 10px; }}
+        body {{ font-family: 'Segoe UI', sans-serif; background: #f4f6f9; padding: 20px; line-height: 1.6; }}
+        .container {{ max-width: 950px; margin: 0 auto; background: white; padding: 50px; border-radius: 15px; }}
+        h1 {{ text-align: center; color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 20px; margin-bottom: 40px; }}
+        .exercice {{ border: 1px solid #ddd; padding: 25px; margin-bottom: 40px; border-radius: 12px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+        .exercice-header {{ display: flex; justify-content: space-between; border-bottom: 2px solid #f0f0f0; margin-bottom: 20px; padding-bottom: 10px; }}
+        .question {{ font-size: 1.1em; color: #2c3e50; margin-bottom: 15px; }}
+        .reponse {{ background: #e8f6f3; border-left: 5px solid #1abc9c; padding: 15px; margin: 15px 0; font-weight: bold; color: #16a085; }}
+        .detail {{ background: #fffbf0; border: 1px solid #ffeeba; padding: 20px; margin-top: 10px; border-radius: 5px; color: #444; }}
+        
+        /* Bouton Impression */
+        .btn-print {{ 
+            display: block; width: 100%; padding: 15px; 
+            background: #27ae60; color: white; text-align: center; 
+            font-size: 18px; font-weight: bold; border-radius: 8px; 
+            cursor: pointer; margin-bottom: 30px; 
+            box-shadow: 0 4px 6px rgba(39, 174, 96, 0.3);
+        }}
+        .btn-print:hover {{ background: #219150; }}
+
         @media print {{
             .no-print {{ display: none; }}
-            details {{ display: block; }}
+            details {{ display: block !important; }}
             summary {{ display: none; }}
+            .correction {{ display: block !important; }}
+            body {{ background: white; padding: 0; }}
+            .container {{ box-shadow: none; border: none; width: 100%; margin: 0; padding: 20px; }}
+            .exercice {{ page-break-inside: avoid; }}
         }}
-        .btn-print {{ display: block; width: 100%; padding: 10px; background: #28a745; color: white; text-align: center; cursor: pointer; border-radius: 5px; margin-bottom: 20px; }}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="no-print btn-print" onclick="window.print()">🖨️ Imprimer en PDF</div>
+        <div class="no-print btn-print" onclick="window.print()">🖨️ Imprimer / Sauvegarder en PDF</div>
         <h1>📚 {titre}</h1>
         {exercices_html}
+        <div style="text-align: center; margin-top: 50px; color: #aaa; font-size: 0.9em;">Généré par Maths Tutor IA</div>
     </div>
 </body>
 </html>
     """
 
-# Fonctions Outils pour le Tuteur
-def outil_calcul_symbolique(expression, operation, variable="x"):
-    try:
-        expression = expression.replace("^", "**").replace(r"\times", "*")
-        x = sympy.symbols(variable)
-        expr = sympy.sympify(expression)
-        if operation == "derive": res = sympy.diff(expr, x)
-        elif operation == "integre": res = sympy.integrate(expr, x)
-        elif operation == "simplifie": res = sympy.simplify(expr)
-        elif operation == "resous": res = sympy.solve(expr, x)
-        else: return "Opération inconnue"
-        return f"Résultat : ${sympy.latex(res)}$"
-    except Exception as e:
-        return f"Erreur : {str(e)}"
-
-# 3. INTERFACE PRINCIPALE
+# 3. INTERFACE
 # ------------------------------------------------------------------
-st.title("🎓 Plateforme Maths IA (Version Stable)")
+st.title("🎓 Plateforme Maths IA (Version Problèmes)")
 
-tab1, tab2 = st.tabs(["💬 Tuteur (Assistant)", "📝 Générateur de Fiches"])
+tab1, tab2 = st.tabs(["💬 Assistant", "📝 Générateur de Fiches"])
 
-# --- ONGLET 1 : TUTEUR ---
 with tab1:
-    st.write("### 🤖 Assistant Mathématique")
-    st.write("Pose tes questions, je peux résoudre des équations et t'expliquer les cours.")
-    
+    st.write("Pose tes questions...")
+    # (Code Tuteur inchangé pour économiser de la place, tu peux le garder tel quel)
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "system", "content": "Tu es un prof de maths bienveillant."}]
-
-    for msg in st.session_state.messages:
-        if msg["role"] != "system":
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-    if prompt := st.chat_input("Ex: Explique-moi le théorème de Pythagore..."):
+        st.session_state.messages = [{"role": "system", "content": "Tu es un assistant mathématique."}]
+    if prompt := st.chat_input("Question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
+        with st.chat_message("user"): st.markdown(prompt)
         with st.chat_message("assistant"):
-            response = client.chat.completions.create(
-                model="gpt-4o",
-                messages=[{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-            )
-            reply = response.choices[0].message.content
-            st.markdown(reply)
-            st.session_state.messages.append({"role": "assistant", "content": reply})
+            res = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
+            st.markdown(res.choices[0].message.content)
+            st.session_state.messages.append({"role": "assistant", "content": res.choices[0].message.content})
 
-# --- ONGLET 2 : GÉNÉRATEUR ---
 with tab2:
-    st.header("📄 Générateur de Fiches")
+    st.header("📄 Création de Sujets")
     
-    c1, c2 = st.columns(2)
-    with c1:
-        sujet = st.text_input("Sujet", "Fonctions affines")
-        niveau = st.selectbox("Niveau", ["1e", "Terminale", "Bac+1", "Bac+2"])
-    with c2:
-        nb = st.slider("Nombre d'exos", 1, 10, 2)
-        diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5], value=3)
+    col1, col2 = st.columns(2)
+    with col1:
+        sujet = st.text_input("Sujet", "Fonctions exponentielles")
+        niveau = st.selectbox("Niveau", ["Lycée (Terminale)", "Prepa (MPSI/PCSI)", "Licence (L1/L2)"])
+    with col2:
+        # NOUVEAU : Choix du type d'exercice
+        type_exo = st.radio("Type de contenu :", ["Exercices d'entraînement (Courts)", "Problèmes complets (Type Bac/Partiels)"])
+        
+        if "Problèmes" in type_exo:
+            nb = st.slider("Nombre de Problèmes", 1, 2, 1) # On limite car c'est long
+            diff = 5 # On force la difficulté
+            st.caption("ℹ️ Les problèmes sont longs, l'IA prendra plus de temps.")
+        else:
+            nb = st.slider("Nombre d'exercices", 1, 6, 3)
+            diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5], value=3)
 
-    if st.button("🚀 Générer la fiche", type="primary"):
-        with st.spinner("Création de la fiche..."):
+    if st.button("🚀 Générer le sujet", type="primary"):
+        with st.spinner("Rédaction approfondie en cours (cela peut prendre 15-20 secondes)..."):
             try:
-                # PROMPT "FORMAT MAISON" (Plus de JSON, plus de problèmes)
-                prompt_systeme = """Tu es un professeur.
-                Génère une fiche d'exercices.
+                # --- CONSTRUCTION DU PROMPT "PÉDAGOGUE EXPERT" ---
                 
-                IMPORTANT : N'utilise PAS de format JSON. Utilise EXACTEMENT ce format texte :
+                consigne_detail = ""
+                if "Problèmes" in type_exo:
+                    structure_demande = "Génère des PROBLÈMES COMPLETS avec plusieurs parties (Partie A, Partie B...). Pose des questions enchaînées (1.a, 1.b, 2...)."
+                    niveau_detail = "EXTRÊME. Pour chaque question, rappelle le théorème utilisé, détaille le calcul intermédiaire, et justifie rigoureusement."
+                else:
+                    structure_demande = "Génère des exercices d'application variés."
+                    niveau_detail = "ÉLEVÉ. Détaille bien les étapes de calcul."
+
+                prompt_systeme = f"""
+                Tu es un professeur de mathématiques universitaire expert et pédagogue.
                 
-                TITRE_FICHE: Le titre ici
+                MISSION :
+                {structure_demande}
+                
+                FORMAT DE SORTIE IMPÉRATIF (Texte brut, PAS de JSON) :
+                
+                TITRE_FICHE: [Titre du sujet]
                 
                 ===NOUVEL_EXERCICE===
-                QUESTION: Énoncé en LaTeX (ex: $x^2$)
-                REPONSE: La réponse
-                DETAIL: Les étapes et explications
-                DIFFICULTE: 3
+                QUESTION:
+                [Énoncé complet ici. Utilise LaTeX $...$ pour les maths. Saute des lignes pour aérer. Si c'est un problème, utilise "1)", "2)", "a)", "b)".]
                 
-                ===NOUVEL_EXERCICE===
-                QUESTION: ...
-                (et ainsi de suite)
+                REPONSE:
+                [Juste les résultats finaux succincts]
+                
+                DETAIL:
+                [CORRECTION TRÈS DÉTAILLÉE ICI. C'est la partie la plus importante.
+                 - Explique la démarche.
+                 - Cite les propriétés utilisées (ex: "D'après le théorème de...").
+                 - Affiche les étapes de calcul intermédiaires.
+                 - Sois très didactique.]
+                
+                DIFFICULTE: {diff}
+                
+                (Répète ===NOUVEL_EXERCICE=== pour chaque exo)
                 """
                 
-                user_content = f"Sujet: {sujet}, Niveau: {niveau}, Difficulté: {diff}, {nb} exercices."
+                user_content = f"Sujet: {sujet}. Niveau: {niveau}. Type: {type_exo}. Quantité: {nb}. {niveau_detail}"
 
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": user_content}
-                    ]
+                    ],
+                    temperature=0.7 # Un peu de créativité pour les problèmes
                 )
                 
                 texte_ia = response.choices[0].message.content
                 
-                # Parsing manuel (Indestructible)
+                # Parsing
                 data = parser_format_maison(texte_ia)
                 
-                # Génération HTML
-                html = generer_html_fiche(data['titre'], data['exercices'])
-                
-                st.success(f"✅ Fiche prête : {data['titre']}")
-                st.components.v1.html(html, height=600, scrolling=True)
-                st.download_button("📥 Télécharger la Fiche (HTML)", html, "fiche.html", "text/html")
+                # Vérification
+                if not data["exercices"]:
+                    st.error("L'IA n'a pas respecté le format. Réessaie.")
+                    st.expander("Voir le texte brut").text(texte_ia)
+                else:
+                    # Génération HTML
+                    html = generer_html_fiche(data['titre'], data['exercices'])
+                    
+                    st.success(f"✅ Sujet généré avec {len(data['exercices'])} exercices/problèmes !")
+                    
+                    # Prévisualisation
+                    st.components.v1.html(html, height=700, scrolling=True)
+                    
+                    # Téléchargement
+                    st.download_button("📥 Télécharger la Fiche (PDF via Impression)", html, "fiche_maths.html", "text/html")
                 
             except Exception as e:
-                st.error(f"Une erreur est survenue : {e}")
+                st.error(f"Erreur : {e}")

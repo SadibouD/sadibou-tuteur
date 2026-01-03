@@ -12,7 +12,7 @@ load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
 if not os.getenv("OPENAI_API_KEY"):
-    st.error("❌ Clé API manquante ! Vérifie ton fichier .env")
+    st.error("❌ Clé API manquante ! ")
     st.stop()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -177,14 +177,14 @@ with tab1:
 
 # --- ONGLET 2 : GÉNÉRATEUR ---
 with tab2:
-    st.header("📄 Générateur de Fiches (Zéro Bug JSON)")
+    st.header("📄 Générateur de Fiches")
     
     c1, c2 = st.columns(2)
     with c1:
         sujet = st.text_input("Sujet", "Fonctions affines")
-        niveau = st.selectbox("Niveau", ["Collège", "Lycée", "Supérieur"])
+        niveau = st.selectbox("Niveau", ["1e", "Terminale", "Bac+1", "Bac+2"])
     with c2:
-        nb = st.slider("Nombre d'exos", 1, 5, 2)
+        nb = st.slider("Nombre d'exos", 1, 10, 2)
         diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5], value=3)
 
     if st.button("🚀 Générer la fiche", type="primary"):
@@ -201,7 +201,7 @@ with tab2:
                 ===NOUVEL_EXERCICE===
                 QUESTION: Énoncé en LaTeX (ex: $x^2$)
                 REPONSE: La réponse
-                DETAIL: Les étapes
+                DETAIL: Les étapes et explications
                 DIFFICULTE: 3
                 
                 ===NOUVEL_EXERCICE===

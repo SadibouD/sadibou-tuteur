@@ -12,15 +12,16 @@ from pydantic import BaseModel, Field
 load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
-# ⭐ AJOUT : Configuration MathJax pour Streamlit
+# Configuration MathJax optimale
 st.markdown("""
 <script>
 window.MathJax = {
   tex: {
-    inlineMath: [['$', '$'], ['\\(', '\\)']],
-    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    inlineMath: [['$', '$']],
+    displayMath: [['$$', '$$']],
     processEscapes: true,
-    processEnvironments: true
+    processEnvironments: true,
+    packages: {'[+]': ['cases', 'amsmath']}
   },
   options: {
     skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
@@ -48,84 +49,75 @@ class FicheTD(BaseModel):
     titre: str = Field(description="Titre de la fiche.")
     exercices: list[ExerciceMaths]
 
-# 3. ⭐ FONCTION DE NETTOYAGE AMÉLIORÉE
+# 3. ⭐ FONCTION DE NETTOYAGE 
 # ------------------------------------------------------------------
 def nettoyer_latex(text):
     """
-    Corrige le formatage LaTeX pour l'affichage dans Streamlit.
-    Gère les backslashs perdus et les délimiteurs manquants.
+    Méthode hybride : Leurre § + nettoyage intelligent
     """
     if not text:
         return ""
     
-    # Étape 1 : Réparation des commandes LaTeX courantes (backslash perdu)
-    corrections = {
-        r'\\times': r'\\times',      # Déjà correct
-        r'times': r'\\times',         # Manquant
-        r'imes': r'\\times',          # Partiellement perdu
-        r'\\frac': r'\\frac',
-        r'frac': r'\\frac',
-        r'\\vec': r'\\vec',
-        r'vec': r'\\vec',
-        r'\\sqrt': r'\\sqrt',
-        r'sqrt': r'\\sqrt',
-        r'\\mathbb': r'\\mathbb',
-        r'mathbb': r'\\mathbb',
-        r'\\begin': r'\\begin',
-        r'begin': r'\\begin',
-        r'\\end': r'\\end',
-        r'end{': r'\\end{',
-        r'\\text': r'\\text',
-        r'text{': r'\\text{',
-    }
+    # ÉTAPE 1 : Remplacer le leurre § par \ si présent
+    text = text.replace('§', '\\')
     
-    # Application des corrections (ordre important !)
-    for pattern, replacement in corrections.items():
-        # Éviter de doubler les backslashs déjà corrects
-        if pattern.startswith('\\\\'):
-            continue
-        text = text.replace(pattern, replacement)
+    # ÉTAPE 2 : Nettoyer les délimiteurs cassés
+    # Cas 1 : $$$ → $$
+    text = re.sub(r'\$\$\$+', '$$', text)
+    # Cas 2 : $ $ → $
+    text = re.sub(r'\$\s+\$', '$$', text)
     
-    # Étape 2 : Conversion des délimiteurs LaTeX
-    # \[ ... \] → $$ ... $$
-    text = re.sub(r'\\\[(.*?)\\\]', r'$$\1$$', text, flags=re.DOTALL)
-    # \( ... \) → $ ... $
-    text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
+    # ÉTAPE 3 : Forcer les environments dans des $$
+    # Détecte \begin{cases}...\end{cases} et ajoute $$ si manquant
+    def wrap_environment(match):
+        content = match.group(0)
+        # Si déjà entouré de $$, ne rien faire
+        if content.startswith('$$') or content.endswith('$$'):
+            return content
+        return f'$${content}$$'
     
-    # Étape 3 : Gestion des environments (cases, align, etc.)
-    # Forcer les $$ autour des environments
     text = re.sub(
-        r'(\\begin\{cases\}.*?\\end\{cases\})',
-        r'$$\1$$',
+        r'\\begin\{cases\}.*?\\end\{cases\}',
+        wrap_environment,
         text,
         flags=re.DOTALL
     )
     
-    # Étape 4 : Nettoyage des commandes de formatage PDF
-    text = text.replace(r'\newline', '\n\n')
-    text = text.replace(r'\\\\', '\n\n')  # Double backslash → saut de ligne
+    # ÉTAPE 4 : Conversion des autres délimiteurs
+    text = re.sub(r'\\\[(.*?)\\\]', r'$$\1$$', text, flags=re.DOTALL)
+    text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
     
-    # Conversion \textbf{} → **Markdown**
+    # ÉTAPE 5 : Nettoyage des commandes de formatage
+    text = text.replace(r'\newline', '\n\n')
+    text = text.replace(r'\\\\', r'\\')  # Double backslash dans les cases
+    
+    # Conversion LaTeX → Markdown
     text = re.sub(r'\\textbf\{(.*?)\}', r'**\1**', text)
     text = re.sub(r'\\textit\{(.*?)\}', r'*\1*', text)
     
-    # Étape 5 : Protection des formules isolées
-    # Si une ligne contient du LaTeX sans délimiteurs, on les ajoute
-    lines = text.split('\n')
-    for i, line in enumerate(lines):
-        # Détection de commandes LaTeX sans $ autour
-        if re.search(r'\\(frac|sqrt|vec|sum|int|lim|mathbb)', line) and not re.search(r'\$', line):
-            lines[i] = f'${line.strip()}$'
+    # ÉTAPE 6 : Correction des backslashs manquants (fallback)
+    # Si malgré tout, certains mots sont cassés
+    latex_commands = [
+        'times', 'frac', 'sqrt', 'sum', 'int', 'lim',
+        'alpha', 'beta', 'gamma', 'delta', 'lambda',
+        'vec', 'overrightarrow', 'mathbb', 'mathcal',
+        'text', 'begin', 'end'
+    ]
     
-    text = '\n'.join(lines)
+    for cmd in latex_commands:
+        # Remplace "cmd{" par "\cmd{" si pas déjà précédé de \
+        text = re.sub(rf'(?<!\\){cmd}\{{', rf'\\{cmd}{{', text)
+    
+    # ÉTAPE 7 : Nettoyage final des espaces
+    text = re.sub(r'\$\s+', '$', text)  # Enlever espaces après $
+    text = re.sub(r'\s+\$', '$', text)  # Enlever espaces avant $
     
     return text
 
 
 def outil_calcul_symbolique(expression, operation, variable="x"):
     try:
-        # Petit nettoyage pré-calcul
-        expression = expression.replace("^", "**").replace(r"\times", "*")
+        expression = expression.replace("^", "**").replace(r"\times", "*").replace('§', '\\')
         x = sympy.symbols(variable)
         expr = sympy.sympify(expression)
         
@@ -174,11 +166,10 @@ with tab1:
         st.session_state.messages = [{"role": "system", "content": "Tu es un assistant mathématique."}]
 
     for msg in st.session_state.messages:
-        # Conversion forcée pour éviter les bugs d'objets
         content = msg["content"] if isinstance(msg, dict) else msg.content
         role = msg["role"] if isinstance(msg, dict) else msg.role
         
-        if content and role != "system":  # Ne pas afficher le système
+        if content and role != "system":
             with st.chat_message(role):
                 st.markdown(nettoyer_latex(content), unsafe_allow_html=True)
 
@@ -189,7 +180,6 @@ with tab1:
 
         with st.chat_message("assistant"):
             container = st.empty()
-            # Appel API
             response = client.chat.completions.create(
                 model="gpt-4o", messages=st.session_state.messages, tools=tools_schema
             )
@@ -228,35 +218,40 @@ with tab2:
     if st.button("🚀 Générer"):
         with st.spinner("Rédaction en cours..."):
             try:
-                # ⭐ PROMPT SYSTÈME AMÉLIORÉ
+                # ⭐ PROMPT AVEC MÉTHODE DU LEURRE §
                 sys_prompt = """
-                Tu es un professeur de mathématiques expert qui génère des exercices de qualité.
+                Tu es un professeur de mathématiques expert.
                 
-                RÈGLES DE FORMATAGE STRICTES :
+                ⚠️ RÈGLE CRITIQUE POUR LE JSON :
+                Le caractère backslash (\) est interdit dans les chaînes JSON car il casse le parsing.
                 
-                1. **Texte normal** : Utilise le Markdown standard
-                   - **Gras** avec **texte**
-                   - *Italique* avec *texte*
-                   - Jamais de \\textbf{} ou \\textit{}
+                ✅ SOLUTION : Remplace TOUS les backslashs par le symbole §
                 
-                2. **Formules mathématiques** : TOUTES les maths doivent être entre $ ou $$
-                   - Inline : $x^2 + 1$
-                   - Display : $$\\frac{a}{b}$$
-                   - Systèmes : $$\\begin{cases} x = 1 \\\\ y = 2 \\end{cases}$$
+                Exemples de conversion :
+                - Au lieu de \\times → écris §times
+                - Au lieu de \\frac{a}{b} → écris §frac{a}{b}
+                - Au lieu de \\vec{u} → écris §vec{u}
+                - Au lieu de \\begin{cases} → écris §begin{cases}
+                - Au lieu de \\mathbb{R} → écris §mathbb{R}
+                - Au lieu de x \\\\ y → écris x §§ y
                 
-                3. **Commandes LaTeX** : TOUJOURS doubler les backslashs dans le JSON
-                   - Écris : \\\\times, \\\\frac{}{}, \\\\vec{u}, \\\\mathbb{R}
-                   - Sinon le backslash sera perdu lors du parsing JSON
+                STRUCTURE DES FORMULES :
+                1. **Formules inline** : Entoure avec $ : $§frac{1}{2}$
+                2. **Formules display** : Entoure avec $$ : $$§int x^2 dx$$
+                3. **Systèmes d'équations** : 
+                   $$§begin{cases}
+                   x = 1 + 2t §§
+                   y = 2 - t §§
+                   z = 3 + 4t
+                   §end{cases}$$
                 
-                4. **Structure** :
-                   - Question claire avec contexte
-                   - Réponse courte (résultat final)
-                   - Correction détaillée avec étapes
+                FORMATAGE TEXTE :
+                - **Gras** : **texte**
+                - *Italique* : *texte*
+                - Jamais de §textbf ou §textit
                 
-                Exemple de bon formatage :
-                "question": "Soit $f(x) = x^2 \\\\times \\\\ln(x)$. Calculer $f'(x)$.",
-                "reponse": "$f'(x) = 2x\\\\ln(x) + x$",
-                "correction_detaillee": "On utilise $(uv)' = u'v + uv'$ avec $u=x^2$ et $v=\\\\ln(x)$..."
+                IMPORTANT : N'utilise JAMAIS le backslash \\ dans ta réponse JSON.
+                Utilise uniquement § à la place, même pour les doubles backslashs (§§).
                 """
                 
                 completion = client.beta.chat.completions.parse(
@@ -275,13 +270,16 @@ with tab2:
                 
                 for i, exo in enumerate(fiche.exercices, 1):
                     with st.container():
-                        # Affichage du titre avec étoiles de difficulté
                         st.markdown(f"### Exercice {i} {'⭐' * exo.difficulte}")
                         
-                        # Question
+                        # Débug : afficher le brut
+                        with st.expander("🔍 Debug (voir le LaTeX brut)"):
+                            st.code(exo.question, language="text")
+                        
+                        # Question nettoyée
                         st.markdown(nettoyer_latex(exo.question), unsafe_allow_html=True)
                         
-                        # Correction dans un expander
+                        # Correction
                         with st.expander("📖 Voir la correction"):
                             st.info(f"**Réponse :** {nettoyer_latex(exo.reponse)}")
                             st.markdown("**Détail :**")
@@ -289,7 +287,6 @@ with tab2:
                         
                         st.markdown("---")
 
-                # Bouton de téléchargement
                 st.download_button(
                     "💾 Télécharger (JSON)",
                     fiche.model_dump_json(indent=2),
@@ -298,5 +295,5 @@ with tab2:
                 )
 
             except Exception as e:
-                st.error(f"❌ Erreur lors de la génération : {e}")
-                st.exception(e)  # Pour déboguer
+                st.error(f"❌ Erreur : {e}")
+                st.exception(e)

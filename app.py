@@ -163,11 +163,25 @@ tab1, tab2 = st.tabs(["💬 Assistant", "📝 Générateur de Fiches"])
 with tab1:
     st.write("Pose tes questions...")
     
+
+    sys_prompt_assistant = """
+    Tu es un professeur de mathématiques français expert et pédagogue.
+    
+    RÈGLES ABSOLUES :
+    1. LANGUE : Réponds STRICTEMENT en français. Ne laisse jamais de mots anglais (comme 'From', 'we have', 'assuming').
+    2. FORMAT : Utilise UNIQUEMENT des dollars ($) pour les formules. Exemple: $x^2$. N'utilise JAMAIS \[ ou \(.
+    3. MATHÉMATIQUES (3D) :
+       - Une droite dans l'espace est l'intersection de deux plans.
+       - Son équation cartésienne est TOUJOURS un SYSTÈME de deux équations.
+       - Exemple : $\\begin{cases} x - 2y + z = 0 \\\\ 3x + y - 5 = 0 \\end{cases}$
+       - NE DONNE PAS la forme symétrique (ex: (x-a)/u = ...) car elle est peu utilisée en France.
+    """
+    
     # Initialisation de l'historique
     if "messages" not in st.session_state:
         st.session_state.messages = [{
-            "role": "system", 
-            "content": "Tu es un expert en mathématiques. UTILISE UNIQUEMENT des dollars ($) pour les formules. Exemple: $x^2$ ou $$x^2$$. N'utilise JAMAIS \[ ou \(."
+                "role": "system", 
+                "content": sys_prompt_assistant
         }]
 
     # Affichage des messages existants
@@ -189,14 +203,12 @@ with tab1:
             res = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
             raw_reply = res.choices[0].message.content
             
-            # --- C'EST ICI QUE JE RÉPARE TON PROBLÈME D'AFFICHAGE ---
-            # Je remplace les crochets \[ par des dollars $$ pour Streamlit
             clean_reply = raw_reply.replace(r"\[", "$$").replace(r"\]", "$$").replace(r"\(", "$").replace(r"\)", "$")
             
             st.markdown(clean_reply)
             st.session_state.messages.append({"role": "assistant", "content": raw_reply})
 
-# --- ONGLET 2 : GÉNÉRATEUR (INCHANGÉ CAR IL MARCHE BIEN) ---
+# --- ONGLET 2 : GÉNÉRATEUR ---
 with tab2:
     st.header("📄 Création de Sujets")
     

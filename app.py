@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import json
 import sympy
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 import base64
@@ -17,6 +18,53 @@ if not os.getenv("OPENAI_API_KEY"):
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # FONCTION DE RÉPARATION JSON
+
+def reparer_json_latex(json_str):
+    """
+    Répare le JSON cassé par les backslashs manquants.
+    Remplace brutalement les erreurs connues (imes, frac, etc.) par la version correcte.
+    """
+    if not json_str: return ""
+
+    # Liste des réparations : (Erreur visible -> Correction JSON avec double backslash)
+    corrections = [
+        (r'imes', r'\\\\times'),       # imes -> \\times
+        (r'frac', r'\\\\frac'),        # frac -> \\frac
+        (r'sqrt', r'\\\\sqrt'),        # sqrt -> \\sqrt
+        (r'vec\{', r'\\\\vec{'),       # vec{ -> \\vec{
+        (r'text\{', r'\\\\text{'),     # text{ -> \\text{
+        (r'cdot', r'\\\\cdot'),
+        (r'infty', r'\\\\infty'),
+        (r'approx', r'\\\\approx'),
+        (r'neq', r'\\\\neq'),
+        (r'geq', r'\\\\geq'),
+        (r'leq', r'\\\\leq'),
+        (r'begin\{', r'\\\\begin{'),
+        (r'end\{', r'\\\\end{'),
+        (r'pi', r'\\\\pi'),
+        (r'alpha', r'\\\\alpha'),
+        (r'beta', r'\\\\beta'),
+        (r'gamma', r'\\\\gamma'),
+        (r'Delta', r'\\\\Delta'),
+        (r'lambda', r'\\\\lambda'),
+        (r'mathbb', r'\\\\mathbb'),
+        (r'mathcal', r'\\\\mathcal'),
+        # Réparation des sauts de ligne systèmes
+        (r'\\\\', r'\\\\\\\\')         # Essayer de doubler les backslashs simples restants
+    ]
+
+    txt_fixed = json_str
+    
+    for erreur, correction in corrections:
+        # On remplace si le mot clé n'est PAS déjà précédé d'un backslash
+        # (Technique Regex "Negative Lookbehind")
+        pattern = r'(?<!\\)' + erreur
+        try:
+            txt_fixed = re.sub(pattern, correction, txt_fixed)
+        except Exception:
+            pass
+            
+    return txt_fixed
 
 # FONCTION POUR GÉNÉRER LE HTML
 def generer_html_fiche(titre, exercices):

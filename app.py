@@ -1,413 +1,202 @@
 import streamlit as st
 import os
 import json
-import sympy
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 from openai import OpenAI
-import base64
+from pydantic import BaseModel
 
-# CONFIGURATION
+# 1. CONFIGURATION
+# ------------------------------------------------------------------
 load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
 if not os.getenv("OPENAI_API_KEY"):
-    st.error("Clé API manquante !")
+    st.error("❌ Clé API manquante ! Vérifie ton fichier .env ou tes secrets Streamlit.")
     st.stop()
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# FONCTION POUR GÉNÉRER LE HTML
-def generer_html_fiche(titre, exercices):
-    """Génère un HTML complet avec MathJax pour les exercices"""
-    
-    exercices_html = ""
-    for i, exo in enumerate(exercices, 1):
-        exercices_html += f"""
-        <div class="exercice">
-            <div class="exercice-header">
-                <h2>📝 Exercice {i}</h2>
-                <span class="difficulte">{'⭐' * exo['difficulte']}</span>
-            </div>
+# 2. MODÈLES DE DONNÉES
+# ------------------------------------------------------------------
+class ExerciceMaths(BaseModel):
+    question: str
+    reponse: str
+    correction_detaillee: str
+    difficulte: int
+
+class FicheTD(BaseModel):
+    titre: str
+    exercices: list[ExerciceMaths]
+
+# 3. GÉNÉRATEUR HTML (DESIGN + RÉPARATION § -> \)
+# ------------------------------------------------------------------
+def generer_html(fiche: FicheTD):
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="fr">
+    <head>
+        <meta charset="UTF-8">
+        <title>{fiche.titre}</title>
+        <script>
+        window.MathJax = {{
+            tex: {{
+                inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+                displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+                processEscapes: true
+            }},
+            svg: {{ fontCache: 'global' }}
+        }};
+        </script>
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px; background: white; color: #333; }}
+            h1 {{ text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 40px; }}
             
-            <div class="question">
-                {exo['question']}
-            </div>
+            .exo-container {{ border: 1px solid #ddd; border-radius: 8px; margin-bottom: 30px; overflow: hidden; page-break-inside: avoid; }}
+            .exo-header {{ background: #f8f9fa; padding: 15px; border-bottom: 1px solid #ddd; font-weight: bold; display: flex; justify-content: space-between; color: #2c3e50; }}
+            .exo-content {{ padding: 20px; line-height: 1.6; font-size: 16px; }}
             
-            <details class="correction">
-                <summary>📖 Voir la correction</summary>
-                <div class="reponse">
-                    <strong>Réponse finale :</strong> {exo['reponse']}
-                </div>
-                <div class="detail">
-                    <strong>Démonstration détaillée :</strong><br>
-                    {exo['correction_detaillee']}
-                </div>
-            </details>
-        </div>
-        """
-    
-    html_complete = f"""
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{titre}</title>
-    
-    <!-- MathJax -->
-    <script>
-    window.MathJax = {{
-        tex: {{
-            inlineMath: [['$', '$']],
-            displayMath: [['$$', '$$']],
-            processEscapes: true,
-            packages: {{'[+]': ['amsmath', 'amssymb']}}
-        }},
-        svg: {{
-            fontCache: 'global'
-        }}
-    }};
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
-    
-    <style>
-        * {{
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }}
-        
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 20px;
-        }}
-        
-        .container {{
-            max-width: 900px;
-            margin: 0 auto;
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }}
-        
-        h1 {{
-            color: #667eea;
-            text-align: center;
-            margin-bottom: 40px;
-            font-size: 2.5em;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
-        }}
-        
-        .exercice {{
-            background: #f8f9fa;
-            border-left: 5px solid #667eea;
-            padding: 25px;
-            margin-bottom: 30px;
-            border-radius: 10px;
-            transition: transform 0.2s;
-        }}
-        
-        .exercice:hover {{
-            transform: translateX(5px);
-        }}
-        
-        .exercice-header {{
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }}
-        
-        .exercice-header h2 {{
-            color: #667eea;
-            font-size: 1.5em;
-        }}
-        
-        .difficulte {{
-            font-size: 1.2em;
-        }}
-        
-        .question {{
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            font-size: 1.1em;
-        }}
-        
-        .correction {{
-            margin-top: 15px;
-        }}
-        
-        summary {{
-            background: #667eea;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.3s;
-        }}
-        
-        summary:hover {{
-            background: #5568d3;
-        }}
-        
-        .reponse {{
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 15px;
-            margin: 15px 0;
-            border-radius: 5px;
-        }}
-        
-        .detail {{
-            background: white;
-            padding: 20px;
-            margin-top: 15px;
-            border-radius: 5px;
-            line-height: 1.8;
-        }}
-        
-        @media print {{
-            body {{
-                background: white;
+            .stars {{ color: #f1c40f; letter-spacing: 2px; }}
+            
+            details {{ margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px; }}
+            summary {{ cursor: pointer; color: #007bff; font-weight: bold; outline: none; margin-bottom: 10px; }}
+            summary:hover {{ text-decoration: underline; }}
+            
+            .correction {{ background: #fff3cd; color: #856404; padding: 15px; border-radius: 5px; border: 1px solid #ffeeba; }}
+            
+            /* Styles pour l'impression PDF */
+            @media print {{
+                .no-print {{ display: none !important; }}
+                body {{ padding: 0; background: white; }}
+                .exo-container {{ border: none; border-bottom: 1px solid #ccc; border-radius: 0; }}
+                details[open] summary {{ display: none; }}
             }}
             
-            .container {{
-                box-shadow: none;
-            }}
-            
-            details {{
-                display: block;
-            }}
-            
-            summary {{
-                display: none;
-            }}
-            
-            .correction {{
-                display: block !important;
-            }}
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>📚 {titre}</h1>
-        {exercices_html}
-        
-        <div style="text-align: center; margin-top: 40px; color: #666;">
-            <p>Généré par Maths Tutor IA 🎓</p>
-        </div>
-    </div>
-</body>
-</html>
+            .btn-print {{ display: block; width: 100%; padding: 15px; background: #28a745; color: white; text-align: center; font-size: 18px; border: none; border-radius: 5px; cursor: pointer; margin-bottom: 20px; font-weight: bold; }}
+            .btn-print:hover {{ background: #218838; }}
+        </style>
+    </head>
+    <body>
+        <button class="btn-print no-print" onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+        <h1>📄 {fiche.titre}</h1>
     """
     
-    return html_complete
-
-
-def outil_calcul_symbolique(expression, operation, variable="x"):
-    try:
-        expression = expression.replace("^", "**").replace(r"\times", "*")
-        x = sympy.symbols(variable)
-        expr = sympy.sympify(expression)
+    for i, exo in enumerate(fiche.exercices, 1):
+        # --- RÉPARATION CRITIQUE ---
+        # On remplace le leurre '§' par le vrai backslash '\' pour MathJax
+        # On remplace les sauts de ligne Python '\n' par des balises HTML <br>
+        q = exo.question.replace('§', '\\').replace("\n", "<br>")
+        r = exo.reponse.replace('§', '\\')
+        c = exo.correction_detaillee.replace('§', '\\').replace("\n", "<br>")
         
-        if operation == "derive":
-            res = sympy.diff(expr, x)
-        elif operation == "integre":
-            res = sympy.integrate(expr, x)
-        elif operation == "simplifie":
-            res = sympy.simplify(expr)
-        elif operation == "resous":
-            res = sympy.solve(expr, x)
-        else:
-            return "Opération inconnue"
+        html_content += f"""
+        <div class="exo-container">
+            <div class="exo-header">
+                <span>Exercice {i}</span>
+                <span class="stars">{'★' * exo.difficulte}</span>
+            </div>
+            <div class="exo-content">
+                <div>{q}</div>
+                
+                <details class="no-print">
+                    <summary>Voir la correction</summary>
+                    <div class="correction">
+                        <strong>Réponse :</strong> ${r}$<br><br>
+                        <strong>Démonstration :</strong><br>{c}
+                    </div>
+                </details>
+            </div>
+        </div>
+        """
         
-        return f"Résultat : ${sympy.latex(res)}$"
-    except Exception as e:
-        return f"Erreur : {str(e)}"
+    html_content += "</body></html>"
+    return html_content
 
+# 4. INTERFACE STREAMLIT
+# ------------------------------------------------------------------
+st.title("🏭 Générateur de Fiches (Mode Anti-Bug §)")
+st.info("Ce générateur utilise une sécurité renforcée pour garantir un affichage parfait des maths.")
 
-tools_schema = [{
-    "type": "function",
-    "function": {
-        "name": "calcul_maths",
-        "description": "Calcul symbolique exact",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "expression": {"type": "string"},
-                "operation": {"type": "string", "enum": ["derive", "integre", "simplifie", "resous"]},
-                "variable": {"type": "string", "default": "x"}
-            },
-            "required": ["expression", "operation"]
-        }
-    }
-}]
+c1, c2 = st.columns(2)
+with c1:
+    sujet = st.text_input("Sujet", "Suites Arithmétiques")
+    niveau = st.selectbox("Niveau", ["Terminale", "Bac+1", "Bac+2"])
+with c2:
+    nb = st.slider("Nombre d'exos", 1, 10, 2)
+    diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5])
 
-# INTERFACE
-st.title("🎓 Plateforme Maths IA")
+if st.button("🚀 Générer la Fiche"):
+    with st.spinner("L'IA rédige votre fiche (Sécurisation JSON en cours)..."):
+        try:
+            # PROMPT AVEC APPRENTISSAGE PAR L'EXEMPLE (FEW-SHOT)
+            # On montre à l'IA exactement ce qu'on veut pour qu'elle imite le format.
+            sys_prompt = """
+            Tu es un professeur de mathématiques expert.
+            Ton objectif est de générer une fiche d'exercices au format JSON strict.
 
-tab1, tab2 = st.tabs(["💬 Tuteur", "📝 Générateur"])
-
-# TAB 1 : TUTEUR
-with tab1:
-    st.write("Pose ta question de maths, je peux calculer avec Python.")
-    
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "system", "content": "Tu es un assistant mathématique expert. Utilise LaTeX entre $ pour les formules."}
-        ]
-
-    for msg in st.session_state.messages:
-        content = msg["content"] if isinstance(msg, dict) else msg.content
-        role = msg["role"] if isinstance(msg, dict) else msg.role
-        
-        if content and role != "system":
-            with st.chat_message(role):
-                st.markdown(content)
-
-    if prompt := st.chat_input("Ex: Dérive ln(x²+1)"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            container = st.empty()
-            response = client.chat.completions.create(
-                model="gpt-4o-2024-08-06",
-                messages=st.session_state.messages,
-                tools=tools_schema
-            )
-            msg_obj = response.choices[0].message
+            ⚠️ PROBLÈME TECHNIQUE :
+            Le caractère backslash '\\' casse le format JSON. Tu ne dois JAMAIS l'utiliser.
             
-            if msg_obj.tool_calls:
-                st.session_state.messages.append(msg_obj)
-                for tool in msg_obj.tool_calls:
-                    if tool.function.name == "calcul_maths":
-                        args = json.loads(tool.function.arguments)
-                        with st.status(f"⚙️ Calcul : {args['operation']}"):
-                            res = outil_calcul_symbolique(
-                                args["expression"],
-                                args["operation"],
-                                args.get("variable", "x")
-                            )
-                        st.session_state.messages.append({
-                            "tool_call_id": tool.id,
-                            "role": "tool",
-                            "name": "calcul_maths",
-                            "content": res
-                        })
-                
-                final = client.chat.completions.create(
-                    model="gpt-4o-2024-08-06",
-                    messages=st.session_state.messages
+            ✅ SOLUTION OBLIGATOIRE :
+            Utilise le symbole '§' à la place de CHAQUE backslash '\\'.
+
+            --- EXEMPLES À SUIVRE (MIMÉTISME) ---
+            
+            Exemple 1 (Vecteurs) :
+            NE PAS ÉCRIRE : "Soit \\vec{u} le vecteur..."
+            ÉCRIRE PLUTÔT : "Soit §vec{u} le vecteur..."
+
+            Exemple 2 (Fractions et Limites) :
+            NE PAS ÉCRIRE : "Calculer \\lim_{x \\to +\\infty} \\frac{1}{x}"
+            ÉCRIRE PLUTÔT : "Calculer §lim_{x §to +§infty} §frac{1}{x}"
+
+            Exemple 3 (Systèmes) :
+            NE PAS ÉCRIRE : "\\begin{cases} ..."
+            ÉCRIRE PLUTÔT : "§begin{cases} ..."
+
+            -------------------------------------
+            Génère le contenu demandé en respectant scrupuleusement cette règle du '§'.
+            """
+            
+            completion = client.beta.chat.completions.parse(
+                model="gpt-4o-2024-08-06",
+                messages=[
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": f"Sujet: {sujet}. Niveau: {niveau}. Diff: {diff}/5. {nb} exercices."}
+                ],
+                response_format=FicheTD,
+            )
+
+            fiche = completion.choices[0].message.parsed
+            
+            # Génération du HTML (Nettoyage automatique § -> \)
+            html_code = generer_html(fiche)
+            
+            st.success("✅ Fiche générée avec succès !")
+            
+            # Options de téléchargement
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.download_button(
+                    "📥 Télécharger la Fiche (HTML)",
+                    data=html_code,
+                    file_name="fiche_maths.html",
+                    mime="text/html"
                 )
-                reply = final.choices[0].message.content
-                container.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-            else:
-                reply = msg_obj.content
-                container.markdown(reply)
-                st.session_state.messages.append({"role": "assistant", "content": reply})
-
-# TAB 2 : GÉNÉRATEUR HTML
-with tab2:
-    st.header("📝 Générateur de Fiches (HTML)")
-    st.info("💡 Nouvelle approche : Génération directe en HTML avec rendu parfait !")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        sujet = st.text_input("📚 Sujet", "Équations paramétriques")
-        niveau = st.selectbox("🎯 Niveau", ["1ère", "Terminale", "Bac+1", "Bac+2"])
-    with col2:
-        nb = st.slider("🔢 Nombre d'exercices", 1, 5, 3)
-        diff = st.select_slider("⭐ Difficulté", [1, 2, 3, 4, 5], value=3)
-
-    if st.button("🚀 Générer la fiche", type="primary"):
-        with st.spinner("✍️ Rédaction en cours..."):
-            try:
-                # PROMPT ULTRA-SIMPLE POUR HTML
-                sys_prompt = """Tu es un professeur de mathématiques qui génère des exercices EN HTML.
-
-RÈGLES :
-1. Utilise le HTML simple avec des balises <p>, <strong>, <em>
-2. Pour les maths, utilise LaTeX entre $ (inline) ou $$ (display)
-3. Pour les systèmes, utilise TOUJOURS :
-   $$\\begin{cases}
-   x = 1 + 2t \\\\
-   y = 3 - t \\\\
-   z = 5
-   \\end{cases}$$
-
-4. Réponds en JSON avec cette structure EXACTE :
-{
-  "titre": "Titre de la fiche",
-  "exercices": [
-    {
-      "question": "<p>Énoncé avec $f(x) = x^2$ en HTML</p>",
-      "reponse": "<p>$x = 5$</p>",
-      "correction_detaillee": "<p>Étape 1: ...</p><p>Donc $résultat$</p>",
-      "difficulte": 3
-    }
-  ]
-}
-
-IMPORTANT : Le contenu doit être du HTML valide avec LaTeX."""
-
-                response = client.chat.completions.create(
-                    model="gpt-4o-2024-08-06",
-                    messages=[
-                        {"role": "system", "content": sys_prompt},
-                        {"role": "user", "content": 
-                         f"Génère {nb} exercices sur '{sujet}' niveau {niveau}, difficulté {diff}/5."
-                        }
-                    ],
-                    response_format={"type": "json_object"}
+            with col_b:
+                st.download_button(
+                    "💾 Sauvegarder JSON (Debug)",
+                    data=fiche.model_dump_json(indent=2),
+                    file_name="debug_data.json",
+                    mime="application/json"
                 )
-                
-                # Parser le JSON
-                data = json.loads(response.choices[0].message.content)
-                
-                # Générer le HTML
-                html_content = generer_html_fiche(data['titre'], data['exercices'])
-                
-                # Afficher dans Streamlit
-                st.success(f"✅ Fiche générée : **{data['titre']}**")
-                
-                # Prévisualisation
-                st.components.v1.html(html_content, height=800, scrolling=True)
-                
-                # Boutons de téléchargement
-                col_a, col_b = st.columns(2)
-                
-                with col_a:
-                    st.download_button(
-                        "💾 Télécharger HTML",
-                        html_content,
-                        f"fiche_{sujet.replace(' ', '_')}.html",
-                        "text/html"
-                    )
-                
-                with col_b:
-                    st.download_button(
-                        "📄 Télécharger JSON",
-                        json.dumps(data, indent=2, ensure_ascii=False),
-                        f"fiche_{sujet.replace(' ', '_')}.json",
-                        "application/json"
-                    )
-                
-                st.info("💡 Astuce : Ouvre le fichier HTML dans ton navigateur, puis Ctrl+P pour l'imprimer en PDF !")
+            
+            # Prévisualisation
+            st.markdown("---")
+            st.subheader("Aperçu Web")
+            components.html(html_code, height=600, scrolling=True)
 
-            except Exception as e:
-                st.error(f"❌ Erreur : {e}")
-                st.exception(e)
-
-st.markdown("---")
-st.caption("🎓 Maths Tutor IA - Nouvelle version HTML | Ctrl+P sur le HTML = PDF parfait !")
+        except Exception as e:
+            st.error(f"Une erreur est survenue : {e}")

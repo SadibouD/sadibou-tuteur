@@ -16,6 +16,8 @@ if not os.getenv("OPENAI_API_KEY"):
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+# FONCTION DE RÉPARATION JSON
+
 # FONCTION POUR GÉNÉRER LE HTML
 def generer_html_fiche(titre, exercices):
     """Génère un HTML complet avec MathJax pour les exercices"""

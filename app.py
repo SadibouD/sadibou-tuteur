@@ -17,7 +17,7 @@ if not os.getenv("OPENAI_API_KEY"):
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# 2. FONCTIONS PARSING & HTML
+# 2. FONCTIONS PARSING & HTML (Générateur)
 # ------------------------------------------------------------------
 
 def parser_format_maison(texte_brut):
@@ -38,7 +38,7 @@ def parser_format_maison(texte_brut):
     blocs = re.split(r"===NOUVEL_EXERCICE===", texte_brut)
     
     for bloc in blocs:
-        if not bloc.strip() or "TITRE_FICHE" in bloc: continue # On saute l'intro
+        if not bloc.strip() or "TITRE_FICHE" in bloc: continue 
 
         exo = {
             "question": "",
@@ -47,17 +47,14 @@ def parser_format_maison(texte_brut):
             "difficulte": 3
         }
         
-        # Regex plus souples pour capturer le contenu même s'il est long
         q_match = re.search(r"QUESTION:\s*(.*?)\s*REPONSE:", bloc, re.DOTALL)
         r_match = re.search(r"REPONSE:\s*(.*?)\s*DETAIL:", bloc, re.DOTALL)
         d_match = re.search(r"DETAIL:\s*(.*?)\s*DIFFICULTE:", bloc, re.DOTALL)
         diff_match = re.search(r"DIFFICULTE:\s*(\d)", bloc)
         
-        # Si on ne trouve pas de difficulté à la fin, on prend le reste comme détail
         if d_match:
             exo["correction_detaillee"] = d_match.group(1).strip()
         else:
-            # Fallback si l'IA oublie le tag DIFFICULTE à la fin
             detail_fallback = re.search(r"DETAIL:\s*(.*)", bloc, re.DOTALL)
             if detail_fallback:
                 exo["correction_detaillee"] = detail_fallback.group(1).strip()
@@ -66,7 +63,6 @@ def parser_format_maison(texte_brut):
         if r_match: exo["reponse"] = r_match.group(1).strip()
         if diff_match: exo["difficulte"] = int(diff_match.group(1))
         
-        # On ajoute l'exo seulement s'il a au moins une question
         if exo["question"]:
             data["exercices"].append(exo)
         
@@ -75,8 +71,6 @@ def parser_format_maison(texte_brut):
 def generer_html_fiche(titre, exercices):
     exercices_html = ""
     for i, exo in enumerate(exercices, 1):
-        # Conversion intelligente des sauts de ligne pour le HTML
-        # On remplace les \n par <br> sauf s'ils sont déjà dans du LaTeX
         q = exo['question'].replace('\n', '<br>')
         r = exo['reponse']
         d = exo['correction_detaillee'].replace('\n', '<br>')
@@ -161,23 +155,48 @@ def generer_html_fiche(titre, exercices):
 
 # 3. INTERFACE
 # ------------------------------------------------------------------
-st.title("🎓 Plateforme Maths IA (Version Problèmes)")
+st.title("🎓 Plateforme Maths IA (Version Finale)")
 
 tab1, tab2 = st.tabs(["💬 Assistant", "📝 Générateur de Fiches"])
 
+# --- ONGLET 1 : ASSISTANT (CORRIGÉ POUR L'AFFICHAGE) ---
 with tab1:
     st.write("Pose tes questions...")
-    # (Code Tuteur inchangé pour économiser de la place, tu peux le garder tel quel)
+    
+    # Initialisation de l'historique
     if "messages" not in st.session_state:
-        st.session_state.messages = [{"role": "system", "content": "Tu es un assistant mathématique."}]
+        st.session_state.messages = [{
+            "role": "system", 
+            "content": "Tu es un expert en mathématiques. UTILISE UNIQUEMENT des dollars ($) pour les formules. Exemple: $x^2$ ou $$x^2$$. N'utilise JAMAIS \[ ou \(."
+        }]
+
+    # Affichage des messages existants
+    for msg in st.session_state.messages:
+        if msg["role"] != "system":
+            with st.chat_message(msg["role"]):
+                # ON NETTOIE L'HISTORIQUE AUSSI
+                content_clean = msg["content"].replace(r"\[", "$$").replace(r"\]", "$$").replace(r"\(", "$").replace(r"\)", "$")
+                st.markdown(content_clean)
+
+    # Nouvelle question
     if prompt := st.chat_input("Question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("user"): 
+            st.markdown(prompt)
+            
         with st.chat_message("assistant"):
+            # Appel API
             res = client.chat.completions.create(model="gpt-4o", messages=st.session_state.messages)
-            st.markdown(res.choices[0].message.content)
-            st.session_state.messages.append({"role": "assistant", "content": res.choices[0].message.content})
+            raw_reply = res.choices[0].message.content
+            
+            # --- C'EST ICI QUE JE RÉPARE TON PROBLÈME D'AFFICHAGE ---
+            # Je remplace les crochets \[ par des dollars $$ pour Streamlit
+            clean_reply = raw_reply.replace(r"\[", "$$").replace(r"\]", "$$").replace(r"\(", "$").replace(r"\)", "$")
+            
+            st.markdown(clean_reply)
+            st.session_state.messages.append({"role": "assistant", "content": raw_reply})
 
+# --- ONGLET 2 : GÉNÉRATEUR (INCHANGÉ CAR IL MARCHE BIEN) ---
 with tab2:
     st.header("📄 Création de Sujets")
     
@@ -186,12 +205,11 @@ with tab2:
         sujet = st.text_input("Sujet", "Fonctions exponentielles")
         niveau = st.selectbox("Niveau", ["Lycée (Terminale)", "Prepa (MPSI/PCSI)", "Licence (L1/L2)"])
     with col2:
-        # NOUVEAU : Choix du type d'exercice
         type_exo = st.radio("Type de contenu :", ["Exercices d'entraînement (Courts)", "Problèmes complets (Type Bac/Partiels)"])
         
         if "Problèmes" in type_exo:
-            nb = st.slider("Nombre de Problèmes", 1, 2, 1) # On limite car c'est long
-            diff = 5 # On force la difficulté
+            nb = st.slider("Nombre de Problèmes", 1, 2, 1)
+            diff = 5
             st.caption("ℹ️ Les problèmes sont longs, l'IA prendra plus de temps.")
         else:
             nb = st.slider("Nombre d'exercices", 1, 6, 3)
@@ -200,8 +218,6 @@ with tab2:
     if st.button("🚀 Générer le sujet", type="primary"):
         with st.spinner("Rédaction approfondie en cours (cela peut prendre 15-20 secondes)..."):
             try:
-                # --- CONSTRUCTION DU PROMPT "PÉDAGOGUE EXPERT" ---
-                
                 consigne_detail = ""
                 if "Problèmes" in type_exo:
                     structure_demande = "Génère des PROBLÈMES COMPLETS avec plusieurs parties (Partie A, Partie B...). Pose des questions enchaînées (1.a, 1.b, 2...)."
@@ -247,28 +263,19 @@ with tab2:
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": user_content}
                     ],
-                    temperature=0.7 # Un peu de créativité pour les problèmes
+                    temperature=0.7 
                 )
                 
                 texte_ia = response.choices[0].message.content
-                
-                # Parsing
                 data = parser_format_maison(texte_ia)
                 
-                # Vérification
                 if not data["exercices"]:
                     st.error("L'IA n'a pas respecté le format. Réessaie.")
                     st.expander("Voir le texte brut").text(texte_ia)
                 else:
-                    # Génération HTML
                     html = generer_html_fiche(data['titre'], data['exercices'])
-                    
                     st.success(f"✅ Sujet généré avec {len(data['exercices'])} exercices/problèmes !")
-                    
-                    # Prévisualisation
                     st.components.v1.html(html, height=700, scrolling=True)
-                    
-                    # Téléchargement
                     st.download_button("📥 Télécharger la Fiche (PDF via Impression)", html, "fiche_maths.html", "text/html")
                 
             except Exception as e:

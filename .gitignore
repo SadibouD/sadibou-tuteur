@@ -3,6 +3,8 @@ venv/
 __pycache__/
 app_backup1.py
 app_backup2.py
+app_backup3.py
+app_backup4.py
 app_temp.py
 main.py
 main_tools.py

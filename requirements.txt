@@ -3,3 +3,5 @@ openai
 sympy
 pydantic
 python-dotenv
+matplotlib
+numpy

@@ -4,6 +4,10 @@ import re
 from dotenv import load_dotenv
 from openai import OpenAI
 import streamlit.components.v1 as components
+import matplotlib.pyplot as plt
+import io
+import base64
+import numpy as np
 import sympy
 
 # 1. CONFIGURATION
@@ -20,47 +24,124 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # 2. FONCTIONS PARSING & HTML (Générateur)
 # ------------------------------------------------------------------
 
+def executer_code_figure(code_python):
+    """
+    Exécute du code Matplotlib généré par l'IA et renvoie l'image en base64.
+    """
+    try:
+        # Création d'un contexte de figure propre
+        plt.figure(figsize=(6, 4))
+        
+        # Environnement sécurisé limité
+        local_env = {'plt': plt, 'np': np}
+        
+        # Exécution du code (Attention : exec() exécute le code tel quel)
+        exec(code_python, {}, local_env)
+        
+        # Sauvegarde dans un buffer mémoire
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+        plt.close()
+        buf.seek(0)
+        
+        # Encodage en base64 pour le HTML
+        img_str = base64.b64encode(buf.read()).decode('utf-8')
+        return f'<img src="data:image/png;base64,{img_str}" style="max-width:100%; margin: 10px auto; display:block; border:1px solid #eee; border-radius:5px;">'
+    except Exception as e:
+        return f"<div style='color:red; font-size:0.8em;'>Erreur génération figure : {e}</div>"
+    
+
+# def parser_format_maison(texte_brut):
+#     """
+#     Découpe le texte généré par l'IA en exercices structurés.
+#     """
+#     data = {"titre": "Fiche de Mathématiques", "exercices": []}
+    
+#     # On nettoie un peu le texte
+#     texte_brut = texte_brut.replace("```text", "").replace("```", "")
+    
+#     # 1. Récupération du titre
+#     titre_match = re.search(r"TITRE_FICHE:\s*(.*)", texte_brut, re.IGNORECASE)
+#     if titre_match:
+#         data["titre"] = titre_match.group(1).strip()
+
+#     # 2. Découpage des exercices via le séparateur
+#     blocs = re.split(r"===NOUVEL_EXERCICE===", texte_brut)
+    
+#     for bloc in blocs:
+#         if not bloc.strip() or "TITRE_FICHE" in bloc: continue 
+
+#         exo = {
+#             "question": "",
+#             "reponse": "",
+#             "correction_detaillee": "",
+#             "difficulte": 3
+#         }
+        
+#         q_match = re.search(r"QUESTION:\s*(.*?)\s*REPONSE:", bloc, re.DOTALL)
+#         r_match = re.search(r"REPONSE:\s*(.*?)\s*DETAIL:", bloc, re.DOTALL)
+#         d_match = re.search(r"DETAIL:\s*(.*?)\s*DIFFICULTE:", bloc, re.DOTALL)
+#         diff_match = re.search(r"DIFFICULTE:\s*(\d)", bloc)
+        
+#         if d_match:
+#             exo["correction_detaillee"] = d_match.group(1).strip()
+#         else:
+#             detail_fallback = re.search(r"DETAIL:\s*(.*)", bloc, re.DOTALL)
+#             if detail_fallback:
+#                 exo["correction_detaillee"] = detail_fallback.group(1).strip()
+
+#         if q_match: exo["question"] = q_match.group(1).strip()
+#         if r_match: exo["reponse"] = r_match.group(1).strip()
+#         if diff_match: exo["difficulte"] = int(diff_match.group(1))
+        
+#         if exo["question"]:
+#             data["exercices"].append(exo)
+        
+#     return data
+
 def parser_format_maison(texte_brut):
-    """
-    Découpe le texte généré par l'IA en exercices structurés.
-    """
     data = {"titre": "Fiche de Mathématiques", "exercices": []}
     
-    # On nettoie un peu le texte
-    texte_brut = texte_brut.replace("```text", "").replace("```", "")
-    
-    # 1. Récupération du titre
-    titre_match = re.search(r"TITRE_FICHE:\s*(.*)", texte_brut, re.IGNORECASE)
+    # Récupération du titre
+    titre_match = re.search(r"TITRE_FICHE\s*:\s*(.*)", texte_brut, re.IGNORECASE)
     if titre_match:
         data["titre"] = titre_match.group(1).strip()
 
-    # 2. Découpage des exercices via le séparateur
+    # Découpage des blocs
     blocs = re.split(r"===NOUVEL_EXERCICE===", texte_brut)
     
     for bloc in blocs:
-        if not bloc.strip() or "TITRE_FICHE" in bloc: continue 
+        if not bloc.strip() or "TITRE_FICHE" in bloc: continue
 
         exo = {
             "question": "",
             "reponse": "",
             "correction_detaillee": "",
+            "figure": None, # Nouveau champ
             "difficulte": 3
         }
         
-        q_match = re.search(r"QUESTION:\s*(.*?)\s*REPONSE:", bloc, re.DOTALL)
-        r_match = re.search(r"REPONSE:\s*(.*?)\s*DETAIL:", bloc, re.DOTALL)
-        d_match = re.search(r"DETAIL:\s*(.*?)\s*DIFFICULTE:", bloc, re.DOTALL)
-        diff_match = re.search(r"DIFFICULTE:\s*(\d)", bloc)
+        # Regex mises à jour pour capturer CODE_PYTHON (optionnel)
+        q_match = re.search(r"QUESTION\s*:\s*(.*?)\s*REPONSE\s*:", bloc, re.DOTALL | re.IGNORECASE)
+        r_match = re.search(r"REPONSE\s*:\s*(.*?)\s*DETAIL\s*:", bloc, re.DOTALL | re.IGNORECASE)
         
-        if d_match:
-            exo["correction_detaillee"] = d_match.group(1).strip()
-        else:
-            detail_fallback = re.search(r"DETAIL:\s*(.*)", bloc, re.DOTALL)
-            if detail_fallback:
-                exo["correction_detaillee"] = detail_fallback.group(1).strip()
+        # On cherche le détail, mais on s'arrête soit à CODE_PYTHON soit à DIFFICULTE
+        d_match = re.search(r"DETAIL\s*:\s*(.*?)\s*(CODE_PYTHON|DIFFICULTE)", bloc, re.DOTALL | re.IGNORECASE)
+        
+        # Capture du code python s'il existe
+        py_match = re.search(r"CODE_PYTHON\s*:\s*(.*?)\s*DIFFICULTE", bloc, re.DOTALL | re.IGNORECASE)
+        
+        diff_match = re.search(r"DIFFICULTE\s*:\s*(\d)", bloc, re.IGNORECASE)
 
         if q_match: exo["question"] = q_match.group(1).strip()
         if r_match: exo["reponse"] = r_match.group(1).strip()
+        if d_match: exo["correction_detaillee"] = d_match.group(1).strip()
+        
+        # Si on a trouvé du code python, on génère l'image tout de suite
+        if py_match:
+            code = py_match.group(1).strip().replace("```python", "").replace("```", "")
+            exo["figure"] = executer_code_figure(code)
+
         if diff_match: exo["difficulte"] = int(diff_match.group(1))
         
         if exo["question"]:
@@ -73,7 +154,22 @@ def generer_html_fiche(titre, exercices):
     for i, exo in enumerate(exercices, 1):
         q = exo['question'].replace('\n', '<br>')
         r = exo['reponse']
+        #d = exo['correction_detaillee'].replace('\n', '<br>')
         d = exo['correction_detaillee'].replace('\n', '<br>')
+    
+        # Gestion de la figure
+        html_figure = ""
+        if exo.get("figure"):
+            html_figure = f"<div class='figure-math'>{exo['figure']}</div>"
+        
+        exercices_html += f"""
+        <div class="exercice">
+            ... (header et question comme avant) ...
+            <div class="question">{q}</div>
+            
+            {html_figure} <details class="correction">
+                ...
+        """
         
         exercices_html += f"""
         <div class="exercice">
@@ -175,6 +271,7 @@ with tab1:
        - Son équation cartésienne est TOUJOURS un SYSTÈME de deux équations.
        - Exemple : $\\begin{cases} x - 2y + z = 0 \\\\ 3x + y - 5 = 0 \\end{cases}$
        - NE DONNE PAS la forme symétrique (ex: (x-a)/u = ...) car elle est peu utilisée en France.
+       - Dans le plan mets la sous forme ax + by + c = 0. 
     """
     
     # Initialisation de l'historique
@@ -215,12 +312,12 @@ with tab2:
     col1, col2 = st.columns(2)
     with col1:
         sujet = st.text_input("Sujet", "Fonctions exponentielles")
-        niveau = st.selectbox("Niveau", ["Lycée (Terminale)", "Prepa (MPSI/PCSI)", "Licence (L1/L2)"])
+        niveau = st.selectbox("Niveau", ["6e","5e","4e","3e","2nde","1e","Terminale","Bac+1","Bac+2"])
     with col2:
-        type_exo = st.radio("Type de contenu :", ["Exercices d'entraînement (Courts)", "Problèmes complets (Type Bac/Partiels)"])
+        type_exo = st.radio("Type de contenu :", ["Exercices d'entraînement (Courts)", "Problèmes complets (Longs)"])
         
         if "Problèmes" in type_exo:
-            nb = st.slider("Nombre de Problèmes", 1, 2, 1)
+            nb = st.slider("Nombre de Problèmes", 1, 3, 1)
             diff = 5
             st.caption("ℹ️ Les problèmes sont longs, l'IA prendra plus de temps.")
         else:
@@ -261,6 +358,9 @@ with tab2:
                  - Cite les propriétés utilisées (ex: "D'après le théorème de...").
                  - Affiche les étapes de calcul intermédiaires.
                  - Sois très didactique.]
+
+                CODE_PYTHON:
+                [OPTIONNEL : Si une figure est nécessaire (courbe, géométrie), écris ICI le code Python Matplotlib pour la tracer. Utilise 'plt.plot()', 'plt.title()', etc. NE FAIS PAS de plt.show().]
                 
                 DIFFICULTE: {diff}
                 

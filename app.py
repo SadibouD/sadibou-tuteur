@@ -154,22 +154,9 @@ def generer_html_fiche(titre, exercices):
     for i, exo in enumerate(exercices, 1):
         q = exo['question'].replace('\n', '<br>')
         r = exo['reponse']
-        #d = exo['correction_detaillee'].replace('\n', '<br>')
         d = exo['correction_detaillee'].replace('\n', '<br>')
     
-        # Gestion de la figure
-        html_figure = ""
-        if exo.get("figure"):
-            html_figure = f"<div class='figure-math'>{exo['figure']}</div>"
         
-        exercices_html += f"""
-        <div class="exercice">
-            ... (header et question comme avant) ...
-            <div class="question">{q}</div>
-            
-            {html_figure} <details class="correction">
-                ...
-        """
         
         exercices_html += f"""
         <div class="exercice">
@@ -349,7 +336,7 @@ with tab2:
                 Générer {nb} exercices sur "{sujet}" pour le niveau {niveau}.
                 
                 EXIGENCES CRITIQUES :
-                1. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte (modélisation, physique, économie) quand c'est possible.
+                1. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
                 2. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
                 3. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
                    Exemple tableau de signe :
@@ -362,8 +349,9 @@ with tab2:
                    Exemple variations (utilise \\nearrow et \\searrow) :
                    $$
                    \\begin{{array}}{{c|ccccc}}
-                   x & -\\infty & & 0 & & +\\infty \\\\ \\hline
-                   Var(f) & +\\infty & \\searrow & 1 & \\nearrow & +\\infty
+                   x & -\\infty & & 2 & & +\\infty \\\\ \\hline
+                   f'(x) & & - & 0 & + & \\\\ \\hline
+                   f(x) & +\\infty & \\searrow & -3 & \\nearrow & +\\infty \\\\[0.5cm]
                    \\end{{array}}
                    $$
                 4. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
@@ -415,69 +403,4 @@ with tab2:
                 
             except Exception as e:
                 st.error(f"Erreur technique : {e}")
-            # try:
-            #     consigne_detail = ""
-            #     if "Problèmes" in type_exo:
-            #         structure_demande = "Génère des PROBLÈMES COMPLETS avec plusieurs parties (Partie A, Partie B...). Pose des questions enchaînées (1.a, 1.b, 2...)."
-            #         niveau_detail = "EXTRÊME. Pour chaque question, rappelle le théorème utilisé, détaille le calcul intermédiaire, et justifie rigoureusement."
-            #     else:
-            #         structure_demande = "Génère des exercices d'application variés."
-            #         niveau_detail = "ÉLEVÉ. Détaille bien les étapes de calcul."
-
-            #     prompt_systeme = f"""
-            #     Tu es un professeur de mathématiques universitaire expert et pédagogue.
-                
-            #     MISSION :
-            #     {structure_demande}
-                
-            #     FORMAT DE SORTIE IMPÉRATIF (Texte brut, PAS de JSON) :
-                
-            #     TITRE_FICHE: [Titre du sujet]
-                
-            #     ===NOUVEL_EXERCICE===
-            #     QUESTION:
-            #     [Énoncé complet ici. Utilise LaTeX $...$ pour les maths. Saute des lignes pour aérer. Si c'est un problème, utilise "1)", "2)", "a)", "b)".]
-                
-            #     REPONSE:
-            #     [Juste les résultats finaux succincts]
-                
-            #     DETAIL:
-            #     [CORRECTION TRÈS DÉTAILLÉE ICI. C'est la partie la plus importante.
-            #      - Explique la démarche.
-            #      - Cite les propriétés utilisées (ex: "D'après le théorème de...").
-            #      - Affiche les étapes de calcul intermédiaires.
-            #      - Sois très didactique.]
-
-            #     CODE_PYTHON:
-            #     [OPTIONNEL : Si une figure est nécessaire (courbe, géométrie), écris ICI le code Python Matplotlib pour la tracer. Utilise 'plt.plot()', 'plt.title()', etc. NE FAIS PAS de plt.show().]
-                
-            #     DIFFICULTE: {diff}
-                
-            #     (Répète ===NOUVEL_EXERCICE=== pour chaque exo)
-            #     """
-                
-            #     user_content = f"Sujet: {sujet}. Niveau: {niveau}. Type: {type_exo}. Quantité: {nb}. {niveau_detail}"
-
-            #     response = client.chat.completions.create(
-            #         model="gpt-4o",
-            #         messages=[
-            #             {"role": "system", "content": prompt_systeme},
-            #             {"role": "user", "content": user_content}
-            #         ],
-            #         temperature=0.7 
-            #     )
-                
-            #     texte_ia = response.choices[0].message.content
-            #     data = parser_format_maison(texte_ia)
-                
-            #     if not data["exercices"]:
-            #         st.error("L'IA n'a pas respecté le format. Réessaie.")
-            #         st.expander("Voir le texte brut").text(texte_ia)
-            #     else:
-            #         html = generer_html_fiche(data['titre'], data['exercices'])
-            #         st.success(f"✅ Sujet généré avec {len(data['exercices'])} exercices/problèmes !")
-            #         st.components.v1.html(html, height=700, scrolling=True)
-            #         st.download_button("📥 Télécharger la Fiche (PDF via Impression)", html, "fiche_maths.html", "text/html")
-                
-            # except Exception as e:
-            #     st.error(f"Erreur : {e}")
+           

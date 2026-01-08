@@ -24,31 +24,31 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # 2. FONCTIONS PARSING & HTML (Générateur)
 # ------------------------------------------------------------------
 
-def executer_code_figure(code_python):
-    """
-    Exécute du code Matplotlib généré par l'IA et renvoie l'image en base64.
-    """
-    try:
-        # Création d'un contexte de figure propre
-        plt.figure(figsize=(6, 4))
+# def executer_code_figure(code_python):
+#     """
+#     Exécute du code Matplotlib généré par l'IA et renvoie l'image en base64.
+#     """
+#     try:
+#         # Création d'un contexte de figure propre
+#         plt.figure(figsize=(6, 4))
         
-        # Environnement sécurisé limité
-        local_env = {'plt': plt, 'np': np}
+#         # Environnement sécurisé limité
+#         local_env = {'plt': plt, 'np': np}
         
-        # Exécution du code (Attention : exec() exécute le code tel quel)
-        exec(code_python, {}, local_env)
+#         # Exécution du code (Attention : exec() exécute le code tel quel)
+#         exec(code_python, {}, local_env)
         
-        # Sauvegarde dans un buffer mémoire
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
-        plt.close()
-        buf.seek(0)
+#         # Sauvegarde dans un buffer mémoire
+#         buf = io.BytesIO()
+#         plt.savefig(buf, format='png', bbox_inches='tight', dpi=150)
+#         plt.close()
+#         buf.seek(0)
         
-        # Encodage en base64 pour le HTML
-        img_str = base64.b64encode(buf.read()).decode('utf-8')
-        return f'<img src="data:image/png;base64,{img_str}" style="max-width:100%; margin: 10px auto; display:block; border:1px solid #eee; border-radius:5px;">'
-    except Exception as e:
-        return f"<div style='color:red; font-size:0.8em;'>Erreur génération figure : {e}</div>"
+#         # Encodage en base64 pour le HTML
+#         img_str = base64.b64encode(buf.read()).decode('utf-8')
+#         return f'<img src="data:image/png;base64,{img_str}" style="max-width:100%; margin: 10px auto; display:block; border:1px solid #eee; border-radius:5px;">'
+#     except Exception as e:
+#         return f"<div style='color:red; font-size:0.8em;'>Erreur génération figure : {e}</div>"
     
 
 # def parser_format_maison(texte_brut):
@@ -325,70 +325,159 @@ with tab2:
             diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5], value=3)
 
     if st.button("🚀 Générer le sujet", type="primary"):
-        with st.spinner("Rédaction approfondie en cours (cela peut prendre 15-20 secondes)..."):
+        with st.spinner("Rédaction approfondie en cours..."):
+
             try:
-                consigne_detail = ""
+                # --- LE CERVEAU : PROMPT "PROFESSEUR AGRÉGÉ" ---
+                
+                consigne_structure = ""
                 if "Problèmes" in type_exo:
-                    structure_demande = "Génère des PROBLÈMES COMPLETS avec plusieurs parties (Partie A, Partie B...). Pose des questions enchaînées (1.a, 1.b, 2...)."
-                    niveau_detail = "EXTRÊME. Pour chaque question, rappelle le théorème utilisé, détaille le calcul intermédiaire, et justifie rigoureusement."
+                    consigne_structure = """
+                    Génère un PROBLÈME COMPLET et LONG avec une mise en situation (Contexte).
+                    Structure obligatoire :
+                    - Partie A : Étude d'une fonction auxiliaire ou conjectures.
+                    - Partie B : Étude de la fonction principale (limites, dérivée, variations).
+                    - Partie C : Application concrète (ex: économie, biologie, physique) ou suite liée.
+                    """
                 else:
-                    structure_demande = "Génère des exercices d'application variés."
-                    niveau_detail = "ÉLEVÉ. Détaille bien les étapes de calcul."
+                    consigne_structure = "Génère des exercices variés et techniques, pas de calculs triviaux."
 
                 prompt_systeme = f"""
-                Tu es un professeur de mathématiques universitaire expert et pédagogue.
+                Tu es un professeur agrégé de mathématiques en France. Tu rédiges un sujet pertinent.
                 
                 MISSION :
-                {structure_demande}
+                Générer {nb} exercices sur "{sujet}" pour le niveau {niveau}.
                 
-                FORMAT DE SORTIE IMPÉRATIF (Texte brut, PAS de JSON) :
+                EXIGENCES CRITIQUES :
+                1. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte (modélisation, physique, économie) quand c'est possible.
+                2. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
+                3. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
+                   Exemple tableau de signe :
+                   $$
+                   \\begin{{array}}{{c|ccccc}}
+                   x & -\\infty & & 2 & & +\\infty \\\\ \\hline
+                   f'(x) & & - & 0 & + &
+                   \\end{{array}}
+                   $$
+                   Exemple variations (utilise \\nearrow et \\searrow) :
+                   $$
+                   \\begin{{array}}{{c|ccccc}}
+                   x & -\\infty & & 0 & & +\\infty \\\\ \\hline
+                   Var(f) & +\\infty & \\searrow & 1 & \\nearrow & +\\infty
+                   \\end{{array}}
+                   $$
+                4. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
                 
-                TITRE_FICHE: [Titre du sujet]
+                {consigne_structure}
+                
+                FORMAT DE SORTIE (Texte brut) :
+                
+                TITRE_FICHE: [Titre Pro]
                 
                 ===NOUVEL_EXERCICE===
                 QUESTION:
-                [Énoncé complet ici. Utilise LaTeX $...$ pour les maths. Saute des lignes pour aérer. Si c'est un problème, utilise "1)", "2)", "a)", "b)".]
+                [Énoncé complet en LaTeX $. Utilise des sous-questions 1.a, 1.b...]
                 
                 REPONSE:
-                [Juste les résultats finaux succincts]
+                [Résultats finaux]
                 
                 DETAIL:
-                [CORRECTION TRÈS DÉTAILLÉE ICI. C'est la partie la plus importante.
-                 - Explique la démarche.
-                 - Cite les propriétés utilisées (ex: "D'après le théorème de...").
-                 - Affiche les étapes de calcul intermédiaires.
-                 - Sois très didactique.]
-
-                CODE_PYTHON:
-                [OPTIONNEL : Si une figure est nécessaire (courbe, géométrie), écris ICI le code Python Matplotlib pour la tracer. Utilise 'plt.plot()', 'plt.title()', etc. NE FAIS PAS de plt.show().]
+                [Correction très détaillée, rappel de cours inclus.]
                 
                 DIFFICULTE: {diff}
                 
-                (Répète ===NOUVEL_EXERCICE=== pour chaque exo)
+                (Répète ===NOUVEL_EXERCICE===)
                 """
                 
-                user_content = f"Sujet: {sujet}. Niveau: {niveau}. Type: {type_exo}. Quantité: {nb}. {niveau_detail}"
-
                 response = client.chat.completions.create(
                     model="gpt-4o",
                     messages=[
                         {"role": "system", "content": prompt_systeme},
-                        {"role": "user", "content": user_content}
+                        {"role": "user", "content": "Rédige le sujet."}
                     ],
-                    temperature=0.7 
+                    temperature=0.6 # Plus bas pour de la rigueur
                 )
                 
                 texte_ia = response.choices[0].message.content
                 data = parser_format_maison(texte_ia)
                 
                 if not data["exercices"]:
-                    st.error("L'IA n'a pas respecté le format. Réessaie.")
-                    st.expander("Voir le texte brut").text(texte_ia)
+                    st.error("Erreur de génération. L'IA a été trop bavarde ou le format est incorrect.")
                 else:
                     html = generer_html_fiche(data['titre'], data['exercices'])
-                    st.success(f"✅ Sujet généré avec {len(data['exercices'])} exercices/problèmes !")
-                    st.components.v1.html(html, height=700, scrolling=True)
-                    st.download_button("📥 Télécharger la Fiche (PDF via Impression)", html, "fiche_maths.html", "text/html")
+                    st.success(f"✅ Sujet prêt ! ({len(data['exercices'])} exercices)")
+                    
+                    # Affichage
+                    st.components.v1.html(html, height=800, scrolling=True)
+                    
+                    # Bouton principal
+                    st.download_button("📥 Télécharger le fichier (Format Web/PDF)", html, "sujet_maths.html", "text/html")
                 
             except Exception as e:
-                st.error(f"Erreur : {e}")
+                st.error(f"Erreur technique : {e}")
+            # try:
+            #     consigne_detail = ""
+            #     if "Problèmes" in type_exo:
+            #         structure_demande = "Génère des PROBLÈMES COMPLETS avec plusieurs parties (Partie A, Partie B...). Pose des questions enchaînées (1.a, 1.b, 2...)."
+            #         niveau_detail = "EXTRÊME. Pour chaque question, rappelle le théorème utilisé, détaille le calcul intermédiaire, et justifie rigoureusement."
+            #     else:
+            #         structure_demande = "Génère des exercices d'application variés."
+            #         niveau_detail = "ÉLEVÉ. Détaille bien les étapes de calcul."
+
+            #     prompt_systeme = f"""
+            #     Tu es un professeur de mathématiques universitaire expert et pédagogue.
+                
+            #     MISSION :
+            #     {structure_demande}
+                
+            #     FORMAT DE SORTIE IMPÉRATIF (Texte brut, PAS de JSON) :
+                
+            #     TITRE_FICHE: [Titre du sujet]
+                
+            #     ===NOUVEL_EXERCICE===
+            #     QUESTION:
+            #     [Énoncé complet ici. Utilise LaTeX $...$ pour les maths. Saute des lignes pour aérer. Si c'est un problème, utilise "1)", "2)", "a)", "b)".]
+                
+            #     REPONSE:
+            #     [Juste les résultats finaux succincts]
+                
+            #     DETAIL:
+            #     [CORRECTION TRÈS DÉTAILLÉE ICI. C'est la partie la plus importante.
+            #      - Explique la démarche.
+            #      - Cite les propriétés utilisées (ex: "D'après le théorème de...").
+            #      - Affiche les étapes de calcul intermédiaires.
+            #      - Sois très didactique.]
+
+            #     CODE_PYTHON:
+            #     [OPTIONNEL : Si une figure est nécessaire (courbe, géométrie), écris ICI le code Python Matplotlib pour la tracer. Utilise 'plt.plot()', 'plt.title()', etc. NE FAIS PAS de plt.show().]
+                
+            #     DIFFICULTE: {diff}
+                
+            #     (Répète ===NOUVEL_EXERCICE=== pour chaque exo)
+            #     """
+                
+            #     user_content = f"Sujet: {sujet}. Niveau: {niveau}. Type: {type_exo}. Quantité: {nb}. {niveau_detail}"
+
+            #     response = client.chat.completions.create(
+            #         model="gpt-4o",
+            #         messages=[
+            #             {"role": "system", "content": prompt_systeme},
+            #             {"role": "user", "content": user_content}
+            #         ],
+            #         temperature=0.7 
+            #     )
+                
+            #     texte_ia = response.choices[0].message.content
+            #     data = parser_format_maison(texte_ia)
+                
+            #     if not data["exercices"]:
+            #         st.error("L'IA n'a pas respecté le format. Réessaie.")
+            #         st.expander("Voir le texte brut").text(texte_ia)
+            #     else:
+            #         html = generer_html_fiche(data['titre'], data['exercices'])
+            #         st.success(f"✅ Sujet généré avec {len(data['exercices'])} exercices/problèmes !")
+            #         st.components.v1.html(html, height=700, scrolling=True)
+            #         st.download_button("📥 Télécharger la Fiche (PDF via Impression)", html, "fiche_maths.html", "text/html")
+                
+            # except Exception as e:
+            #     st.error(f"Erreur : {e}")

@@ -29,23 +29,33 @@ client = OpenAI(
     base_url="https://api.deepseek.com"  # Adresse officielle de l'API DeepSeek
 )
 
-# 2. PARSEUR TEXTE (ROBUSTE)
+# 2. PARSEUR TEXTE
 # ------------------------------------------------------------------
+
 def parser_format_maison(texte_brut):
     """
     Découpe le texte de l'IA en exercices structurés.
+    Accepte les variantes de formatage (gras, italique, etc.)
     """
     data = {"titre": "Fiche de Mathématiques", "exercices": []}
     
-    texte_brut = texte_brut.replace("```text", "").replace("```", "")
+    # 1. Nettoyage global du texte pour faciliter la lecture
+    # On enlève les balises code, et on supprime les étoiles ** autour des mots clés
+    texte_clean = texte_brut.replace("```text", "").replace("```", "")
     
-    # Titre
-    titre_match = re.search(r"TITRE_FICHE\s*:\s*(.*)", texte_brut, re.IGNORECASE)
+    # On nettoie spécifiquement les clés pour que le regex les trouve
+    # Ex: transforme "**TITRE_FICHE**:" en "TITRE_FICHE:"
+    for key in ["TITRE_FICHE", "QUESTION", "REPONSE", "DETAIL", "DIFFICULTE"]:
+        texte_clean = re.sub(fr"\**{key}\**\s*:", f"{key}:", texte_clean, flags=re.IGNORECASE)
+        texte_clean = re.sub(fr"\#{key}", f"{key}", texte_clean, flags=re.IGNORECASE)
+
+    # 2. Récupération du titre
+    titre_match = re.search(r"TITRE_FICHE\s*:\s*(.*)", texte_clean, re.IGNORECASE)
     if titre_match:
         data["titre"] = titre_match.group(1).strip()
 
-    # Blocs
-    blocs = re.split(r"===NOUVEL_EXERCICE===", texte_brut)
+    # 3. Découpage des blocs
+    blocs = re.split(r"===NOUVEL_EXERCICE===", texte_clean)
     
     for bloc in blocs:
         if not bloc.strip() or "TITRE_FICHE" in bloc: continue
@@ -57,12 +67,13 @@ def parser_format_maison(texte_brut):
             "difficulte": 3
         }
         
+        # Regex (maintenant qu'on a nettoyé, on peut chercher simplement)
         q_match = re.search(r"QUESTION\s*:\s*(.*?)\s*REPONSE\s*:", bloc, re.DOTALL | re.IGNORECASE)
         r_match = re.search(r"REPONSE\s*:\s*(.*?)\s*DETAIL\s*:", bloc, re.DOTALL | re.IGNORECASE)
         d_match = re.search(r"DETAIL\s*:\s*(.*?)\s*DIFFICULTE\s*:", bloc, re.DOTALL | re.IGNORECASE)
         diff_match = re.search(r"DIFFICULTE\s*:\s*(\d)", bloc, re.IGNORECASE)
         
-        # Fallback détail
+        # Fallback détail (si l'IA oublie DIFFICULTE à la fin)
         if d_match:
             exo["correction_detaillee"] = d_match.group(1).strip()
         else:
@@ -78,6 +89,53 @@ def parser_format_maison(texte_brut):
             data["exercices"].append(exo)
         
     return data
+# def parser_format_maison(texte_brut):
+#     """
+#     Découpe le texte de l'IA en exercices structurés.
+#     """
+#     data = {"titre": "Fiche de Mathématiques", "exercices": []}
+    
+#     texte_brut = texte_brut.replace("```text", "").replace("```", "")
+    
+#     # Titre
+#     titre_match = re.search(r"TITRE_FICHE\s*:\s*(.*)", texte_brut, re.IGNORECASE)
+#     if titre_match:
+#         data["titre"] = titre_match.group(1).strip()
+
+#     # Blocs
+#     blocs = re.split(r"===NOUVEL_EXERCICE===", texte_brut)
+    
+#     for bloc in blocs:
+#         if not bloc.strip() or "TITRE_FICHE" in bloc: continue
+
+#         exo = {
+#             "question": "",
+#             "reponse": "",
+#             "correction_detaillee": "",
+#             "difficulte": 3
+#         }
+        
+#         q_match = re.search(r"QUESTION\s*:\s*(.*?)\s*REPONSE\s*:", bloc, re.DOTALL | re.IGNORECASE)
+#         r_match = re.search(r"REPONSE\s*:\s*(.*?)\s*DETAIL\s*:", bloc, re.DOTALL | re.IGNORECASE)
+#         d_match = re.search(r"DETAIL\s*:\s*(.*?)\s*DIFFICULTE\s*:", bloc, re.DOTALL | re.IGNORECASE)
+#         diff_match = re.search(r"DIFFICULTE\s*:\s*(\d)", bloc, re.IGNORECASE)
+        
+#         # Fallback détail
+#         if d_match:
+#             exo["correction_detaillee"] = d_match.group(1).strip()
+#         else:
+#             fallback = re.search(r"DETAIL\s*:\s*(.*)", bloc, re.DOTALL | re.IGNORECASE)
+#             if fallback:
+#                 exo["correction_detaillee"] = fallback.group(1).strip()
+
+#         if q_match: exo["question"] = q_match.group(1).strip()
+#         if r_match: exo["reponse"] = r_match.group(1).strip()
+#         if diff_match: exo["difficulte"] = int(diff_match.group(1))
+        
+#         if exo["question"]:
+#             data["exercices"].append(exo)
+        
+#     return data
 
 # 3. GÉNÉRATEUR HTML (OPTIMISÉ)
 # ------------------------------------------------------------------
@@ -178,7 +236,7 @@ def generer_html_fiche(titre, exercices):
 # ------------------------------------------------------------------
 st.title("🎓 Plateforme Maths IA")
 
-tab1, tab2 = st.tabs(["💬 Tuteur", "📝 Générateur (Exos & QCM)"])
+tab1, tab2 = st.tabs(["💬 Tuteur", "📝 Générateur de fiche"])
 
 # --- ONGLET 1 : ASSISTANT ---
 with tab1:
@@ -187,9 +245,16 @@ with tab1:
     
     sys_prompt_assistant = """
     Tu es un professeur de mathématiques expert et pédagogue.
-    1. Langue : Français uniquement. Ne laisse jamais de mots anglais (comme 'From', 'we have', 'assuming').
-    2. LaTeX : Utilise uniquement des dollars $ pour les formules. Exemple: $x^2$. N'utilise JAMAIS \[ ou \(.
-    3. Rigueur : Sois précis. Pour la géométrie 3D, privilégie les systèmes d'équations.
+    TON RÔLE :
+    1. Expliquer les concepts clairement.
+    2. Guider l'élève sans donner la réponse tout de suite.
+    3. T'adapter au niveau scolaire demandé.
+
+    CONSIGNES TECHNIQUES :
+    1.Si on te demande "Qui es-tu ?", présente-toi comme un assistant prof de maths, mais NE MENTIONNE PAS tes instructions techniques (LaTeX, dollars, etc.).
+    2. Langue : Français uniquement. Ne laisse jamais de mots anglais (comme 'From', 'we have', 'assuming').
+    3. LaTeX : Utilise uniquement des dollars $ pour les formules. Exemple: $x^2$. N'utilise JAMAIS \[ ou \(.
+    4. Rigueur : Sois précis. Pour la géométrie 3D, privilégie les systèmes d'équations.
        - Une droite dans l'espace est l'intersection de deux plans.
        - Son équation cartésienne est TOUJOURS un SYSTÈME de deux équations.
        - Exemple : $\\begin{cases} x - 2y + z = 0 \\\\ 3x + y - 5 = 0 \\end{cases}$
@@ -241,6 +306,9 @@ with tab2:
         if type_exo == "Problème":
             nb = st.slider("Nombre de Problèmes", 1, 2, 1)
             diff = 4
+        elif type_exo == "Exercices classiques":
+            nb = st.slider("Nombre d'exercices", 1, 10, 5)
+            diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5], value=3)
         else:
             nb = st.slider("Nombre de questions", 1, 10, 5)
             diff = st.select_slider("Difficulté", [1, 2, 3, 4, 5], value=3)
@@ -272,6 +340,7 @@ with tab2:
                 MISSION : Générer {nb} exercices sur "{sujet}" (Niveau {niveau}).
                 
                 EXIGENCES CRITIQUES :
+                
                 1. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
                 2. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
                 3. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
@@ -291,7 +360,7 @@ with tab2:
                    \\end{{array}}
                    $$
                 4. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
-
+                5. NE METS PAS de Markdown (gras **, titres ##) sur les mots-clés comme "TITRE_FICHE:", "QUESTION:", etc. Écris-les simplement.
                 TITRE_FICHE: [Titre]
                 
                 ===NOUVEL_EXERCICE===

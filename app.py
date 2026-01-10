@@ -360,11 +360,16 @@ with tab2:
                     Tu es un professeur agrégé de mathématiques en France. Tu rédiges un sujet pertinent.
                     MISSION : Générer {nb} exercices sur "{sujet}" (Niveau {niveau}).
                     
+                    RÈGLES CRITIQUES ANTI-BAVARDAGE :
+                    1. NE MONTRE JAMAIS tes hésitations, tes ratures ou tes "vérifications".
+                    2. Si tu t'aperçois qu'un énoncé est faux pendant la correction, NE L'ÉCRIS PAS. Recommence silencieusement ou simplifie l'exercice.
+                    3. Le champ "DETAIL" doit contenir UNIQUEMENT la correction propre et directe. Pas de "Essayons autre chose..." ou "Oups erreur".
+
                     EXIGENCES CRITIQUES :
                     1. AÉRATION : C'est très important. Saute des lignes entre chaque étape de calcul. N'écris pas de blocs de texte compacts.
                     2. LATEX : Utilise `$$` (double dollar) pour les formules importantes afin qu'elles soient centrées.
                     3. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
-                    4. COHERENCE : Ne change jamais l'énoncé en cours de route. Si tu te trompes, recommence.
+                    4. LANGUE : Français uniquement. Ne laisse jamais de mots anglais (comme 'From', 'we have', 'assuming').
                     5. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
                     6. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
                     Exemple tableau de signe :
@@ -401,7 +406,7 @@ with tab2:
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": "Génère la fiche."}
                     ],
-                    temperature=0.5,
+                    temperature=0.3,
                     max_tokens=8000
                 )
                 

@@ -10,13 +10,13 @@ import streamlit.components.v1 as components
 load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
-api_key = os.getenv("OPENAI_API_KEY")
-#api_key = os.getenv("DEEPSEEK_API_KEY")
+#api_key = os.getenv("OPENAI_API_KEY")
+api_key = os.getenv("DEEPSEEK_API_KEY")
 if not api_key:
     # 2. Dans les Secrets Streamlit (Cloud)
     try:
-        #api_key = st.secrets["DEEPSEEK_API_KEY"]
-        api_key = st.secrets["OPENAI_API_KEY"]
+        api_key = st.secrets["DEEPSEEK_API_KEY"]
+        #api_key = st.secrets["OPENAI_API_KEY"]
     except:
         pass
 
@@ -25,12 +25,12 @@ if not api_key:
     st.error("❌ Clé API manquante !")
     st.stop()
 
-client = OpenAI(api_key=api_key)
+#client = OpenAI(api_key=api_key)
 # Configuration du client pour DeepSeek
-# client = OpenAI(
-#     api_key=os.getenv("DEEPSEEK_API_KEY"),
-#     base_url="https://api.deepseek.com"  # Adresse officielle de l'API DeepSeek
-# )
+client = OpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com"  # Adresse officielle de l'API DeepSeek
+      )
 
 # 2. PARSEUR TEXTE
 # ------------------------------------------------------------------
@@ -282,8 +282,8 @@ with tab1:
             try:
                 # Utilisation de DeepSeek Chat (V3)
                 res = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    #model="deepseek-chat", 
+                    #model="gpt-4o-mini",
+                    model="deepseek-chat", 
                     messages=st.session_state.messages,
                     temperature=0.4
                 )
@@ -358,7 +358,7 @@ with tab2:
                         Tu peux PARFOIS utiliser ce type de format: Partie A (Étude préliminaire), Partie B (Fonction principale), Partie C (Application).
                         """
                     else:
-                        consigne_structure = "Génère des exercices d'entraînement technique variés, pas de calculs triviaux."
+                        consigne_structure = "Génère des exercices d'entraînement  variés, pas de calculs triviaux."
 
                     prompt_systeme = f"""
                     Tu es un professeur agrégé de mathématiques en France. Tu rédiges un sujet pertinent.
@@ -370,7 +370,7 @@ with tab2:
                     3. Le champ "DETAIL" doit contenir UNIQUEMENT la correction propre et directe.  Ne produis AUCUN texte de réflexion, d'hésitation ou de commentaire dans ta réponse. Pas de "Essayons autre chose..." ou "Oups erreur".
 
                     EXIGENCES CRITIQUES :
-                    1. AÉRATION : C'est très important. Saute des lignes entre chaque étape de calcul. N'écris pas de blocs de texte compacts.
+                    1. AÉRATION : C'est très important. SAUTE des lignes entre chaque étape de calcul. N'écris pas de blocs de texte compacts.
                     2. LATEX : Utilise `$$` (double dollar) pour les formules importantes afin qu'elles soient centrées.
                     3. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
                     4. LANGUE : Français uniquement. Ne laisse jamais de mots anglais (comme 'From', 'we have', 'assuming').
@@ -397,7 +397,7 @@ with tab2:
                     
                     ===NOUVEL_EXERCICE===
                     QUESTION: [Énoncé complet en LaTeX $. Tu peux utiliser des sous-questions 1.a, 1.b...]
-                    REPONSE: [Résultat]
+                    REPONSE: [Résultat bien aéré]
                     DETAIL: [Démonstration]
                     DIFFICULTE: {diff}
                     
@@ -405,14 +405,14 @@ with tab2:
                     """
                     
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    #model="deepseek-chat", # Modèle DeepSeek V3
+                    #model="gpt-4o-mini",
+                    model="deepseek-chat", # Modèle DeepSeek V3
                     messages=[
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": "Génère la fiche."}
                     ],
-                    temperature=0.3,
-                    max_tokens=4000
+                    temperature=0.2,
+                    max_tokens=8000
                 )
                 
                 texte_ia = response.choices[0].message.content

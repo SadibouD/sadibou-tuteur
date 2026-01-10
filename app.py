@@ -10,11 +10,13 @@ import streamlit.components.v1 as components
 load_dotenv()
 st.set_page_config(page_title="Maths Tutor IA", page_icon="🎓", layout="wide")
 
-api_key = os.getenv("DEEPSEEK_API_KEY")
+api_key = os.getenv("OPENAI_API_KEY")
+#api_key = os.getenv("DEEPSEEK_API_KEY")
 if not api_key:
     # 2. Dans les Secrets Streamlit (Cloud)
     try:
-        api_key = st.secrets["DEEPSEEK_API_KEY"]
+        #api_key = st.secrets["DEEPSEEK_API_KEY"]
+        api_key = st.secrets["OPENAI_API_KEY"]
     except:
         pass
 
@@ -23,11 +25,12 @@ if not api_key:
     st.error("❌ Clé API manquante !")
     st.stop()
 
+client = OpenAI(api_key=api_key)
 # Configuration du client pour DeepSeek
-client = OpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"),
-    base_url="https://api.deepseek.com"  # Adresse officielle de l'API DeepSeek
-)
+# client = OpenAI(
+#     api_key=os.getenv("DEEPSEEK_API_KEY"),
+#     base_url="https://api.deepseek.com"  # Adresse officielle de l'API DeepSeek
+# )
 
 # 2. PARSEUR TEXTE
 # ------------------------------------------------------------------
@@ -279,7 +282,8 @@ with tab1:
             try:
                 # Utilisation de DeepSeek Chat (V3)
                 res = client.chat.completions.create(
-                    model="deepseek-chat", 
+                    model="gpt-4o-mini",
+                    #model="deepseek-chat", 
                     messages=st.session_state.messages,
                     temperature=0.4
                 )
@@ -401,13 +405,14 @@ with tab2:
                     """
                     
                 response = client.chat.completions.create(
-                    model="deepseek-chat", # Modèle DeepSeek V3
+                    model="gpt-4o-mini",
+                    #model="deepseek-chat", # Modèle DeepSeek V3
                     messages=[
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": "Génère la fiche."}
                     ],
-                    temperature=0.2,
-                    max_tokens=8000
+                    temperature=0.3,
+                    max_tokens=4000
                 )
                 
                 texte_ia = response.choices[0].message.content

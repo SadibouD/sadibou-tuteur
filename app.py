@@ -320,65 +320,88 @@ with tab2:
                 consigne_structure = ""
                 
                 if type_exo == "Quiz":
-                    consigne_structure = """
-                    Génère un QCM (Questionnaire à Choix Multiples).
-                    Pour chaque exercice :
-                    - QUESTION : L'énoncé suivi obligatoirement de 4 choix clairs : A) ... B) ... C) ... D) ...
-                    - REPONSE : Juste la lettre de la bonne réponse (ex: Réponse B).
-                    - DETAIL : L'explication complète de pourquoi c'est la bonne réponse.
-                    """
-                elif type_exo == "Problème":
-                    consigne_structure = """
-                    Génère un PROBLÈME COMPLET avec PARFOIS du contexte.
-                    Tu peux PARFOIS utiliser ce type de format: Partie A (Étude préliminaire), Partie B (Fonction principale), Partie C (Application).
+                #     consigne_structure = """
+                #     Génère un QCM (Questionnaire à Choix Multiples).
+                #     Pour chaque exercice :
+                #     - QUESTION : L'énoncé suivi obligatoirement de 4 choix clairs : A) ... B) ... C) ... D) ...
+                #     - REPONSE : Juste la lettre de la bonne réponse (ex: Réponse B).
+                #     - DETAIL : L'explication complète de pourquoi c'est la bonne réponse.
+                #     """
+                    prompt_systeme = f"""
+                    Tu es un générateur de QCM (Questionnaire à Choix Multiples) pour le niveau {niveau} sur "{sujet}".
+                    
+                    RÈGLES STRICTES :
+                    1. Génère {nb} questions.
+                    2. Pour CHAQUE question, propose 4 choix explicites : A), B), C), D).
+                    3. Il ne doit y avoir qu'une seule bonne réponse.
+                    4. NE DEMANDE PAS de "Montrer que" ou "Déduire". Pose une question directe.
+                    5. FORMAT DE SORTIE :
+                    
+                    TITRE_FICHE: Quiz - {sujet}
+                    
+                    ===NOUVEL_EXERCICE===
+                    QUESTION: [Énoncé + Choix A, B, C, D]
+                    REPONSE: [Juste la lettre, ex: Réponse B]
+                    DETAIL: [Explication courte et claire]
+                    DIFFICULTE: 2
+                    
+                    (Répète pour les {nb} questions)
                     """
                 else:
-                    consigne_structure = "Génère des exercices d'entraînement technique variés, pas de calculs triviaux."
+                    if type_exo == "Problème":
+                        consigne_structure = """
+                        Génère un PROBLÈME COMPLET avec PARFOIS du contexte.
+                        Tu peux PARFOIS utiliser ce type de format: Partie A (Étude préliminaire), Partie B (Fonction principale), Partie C (Application).
+                        """
+                    else:
+                        consigne_structure = "Génère des exercices d'entraînement technique variés, pas de calculs triviaux."
 
-                prompt_systeme = f"""
-                Tu es un professeur agrégé de mathématiques en France. Tu rédiges un sujet pertinent.
-                MISSION : Générer {nb} exercices sur "{sujet}" (Niveau {niveau}).
-                
-                EXIGENCES CRITIQUES :
-                
-                1. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
-                2. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
-                3. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
-                   Exemple tableau de signe :
-                   $$
-                   \\begin{{array}}{{c|ccccc}}
-                   x & -\\infty & & 2 & & +\\infty \\\\ \\hline
-                   f'(x) & & - & 0 & + &
-                   \\end{{array}}
-                   $$
-                   Exemple variations (utilise \\nearrow et \\searrow) :
-                   $$
-                   \\begin{{array}}{{c|ccccc}}
-                   x & -\\infty & & 2 & & +\\infty \\\\ \\hline
-                   f'(x) & & - & 0 & + & \\\\ \\hline
-                   f(x) & +\\infty & \\searrow & -3 & \\nearrow & +\\infty \\\\[0.5cm]
-                   \\end{{array}}
-                   $$
-                4. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
-                5. NE METS PAS de Markdown (gras **, titres ##) sur les mots-clés comme "TITRE_FICHE:", "QUESTION:", etc. Écris-les simplement.
-                TITRE_FICHE: [Titre]
-                
-                ===NOUVEL_EXERCICE===
-                QUESTION: [Énoncé complet en LaTeX $. Utilise des sous-questions 1.a, 1.b...]
-                REPONSE: [Résultat]
-                DETAIL: [Démonstration]
-                DIFFICULTE: {diff}
-                
-                {consigne_structure}
-                """
-                
+                    prompt_systeme = f"""
+                    Tu es un professeur agrégé de mathématiques en France. Tu rédiges un sujet pertinent.
+                    MISSION : Générer {nb} exercices sur "{sujet}" (Niveau {niveau}).
+                    
+                    EXIGENCES CRITIQUES :
+                    1. AÉRATION : C'est très important. Saute des lignes entre chaque étape de calcul. N'écris pas de blocs de texte compacts.
+                    2. LATEX : Utilise `$$` (double dollar) pour les formules importantes afin qu'elles soient centrées.
+                    3. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
+                    4. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
+                    5. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
+                    Exemple tableau de signe :
+                    $$
+                    \\begin{{array}}{{c|ccccc}}
+                    x & -\\infty & & 2 & & +\\infty \\\\ \\hline
+                    f'(x) & & - & 0 & + &
+                    \\end{{array}}
+                    $$
+                    Exemple variations (utilise \\nearrow et \\searrow) :
+                    $$
+                    \\begin{{array}}{{c|ccccc}}
+                    x & -\\infty & & 2 & & +\\infty \\\\ \\hline
+                    f'(x) & & - & 0 & + & \\\\ \\hline
+                    f(x) & +\\infty & \\searrow & -3 & \\nearrow & +\\infty \\\\[0.5cm]
+                    \\end{{array}}
+                    $$
+                    6. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
+                    7. NE METS PAS de Markdown (gras **, titres ##) sur les mots-clés comme "TITRE_FICHE:", "QUESTION:", etc. Écris-les simplement.
+                    TITRE_FICHE: [Titre]
+                    
+                    ===NOUVEL_EXERCICE===
+                    QUESTION: [Énoncé complet en LaTeX $. Tu peux utiliser des sous-questions 1.a, 1.b...]
+                    REPONSE: [Résultat]
+                    DETAIL: [Démonstration]
+                    DIFFICULTE: {diff}
+                    
+                    {consigne_structure}
+                    """
+                    
                 response = client.chat.completions.create(
                     model="deepseek-chat", # Modèle DeepSeek V3
                     messages=[
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": "Génère la fiche."}
                     ],
-                    temperature=0.5
+                    temperature=0.5,
+                    max_tokens=8000
                 )
                 
                 texte_ia = response.choices[0].message.content

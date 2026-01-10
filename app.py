@@ -362,8 +362,8 @@ with tab2:
                     
                     RÈGLES CRITIQUES ANTI-BAVARDAGE :
                     1. NE MONTRE JAMAIS tes hésitations, tes ratures ou tes "vérifications".
-                    2. Si tu t'aperçois qu'un énoncé est faux pendant la correction, NE L'ÉCRIS PAS. Recommence silencieusement ou simplifie l'exercice.
-                    3. Le champ "DETAIL" doit contenir UNIQUEMENT la correction propre et directe. Pas de "Essayons autre chose..." ou "Oups erreur".
+                    2. Si tu trouves une erreur, corrige l'énoncé AVANT de l'afficher.
+                    3. Le champ "DETAIL" doit contenir UNIQUEMENT la correction propre et directe.  Ne produis AUCUN texte de réflexion, d'hésitation ou de commentaire dans ta réponse. Pas de "Essayons autre chose..." ou "Oups erreur".
 
                     EXIGENCES CRITIQUES :
                     1. AÉRATION : C'est très important. Saute des lignes entre chaque étape de calcul. N'écris pas de blocs de texte compacts.
@@ -406,7 +406,7 @@ with tab2:
                         {"role": "system", "content": prompt_systeme},
                         {"role": "user", "content": "Génère la fiche."}
                     ],
-                    temperature=0.3,
+                    temperature=0.2,
                     max_tokens=8000
                 )
                 

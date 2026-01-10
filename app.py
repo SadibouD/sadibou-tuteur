@@ -364,8 +364,9 @@ with tab2:
                     1. AÉRATION : C'est très important. Saute des lignes entre chaque étape de calcul. N'écris pas de blocs de texte compacts.
                     2. LATEX : Utilise `$$` (double dollar) pour les formules importantes afin qu'elles soient centrées.
                     3. CONTEXTE : Les exercices ne doivent pas être abstraits. Ajoute du contexte sur certains exercices (modélisation, physique, économie) quand c'est possible.
-                    4. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
-                    5. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
+                    4. COHERENCE : Ne change jamais l'énoncé en cours de route. Si tu te trompes, recommence.
+                    5. RIGUEUR : Utilise les notations françaises (ln, exp, vecteurs avec flèche).
+                    6. TABLEAUX : Si tu dois faire un tableau de variations ou de signes, utilise IMPÉRATIVEMENT du LaTeX avec l'environnement `array`.
                     Exemple tableau de signe :
                     $$
                     \\begin{{array}}{{c|ccccc}}
@@ -381,8 +382,8 @@ with tab2:
                     f(x) & +\\infty & \\searrow & -3 & \\nearrow & +\\infty \\\\[0.5cm]
                     \\end{{array}}
                     $$
-                    6. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
-                    7. NE METS PAS de Markdown (gras **, titres ##) sur les mots-clés comme "TITRE_FICHE:", "QUESTION:", etc. Écris-les simplement.
+                    7. COMPLEXITÉ : Évite les questions triviales. Pose des questions "Montrer que...", "Déduire que...".
+                    8. NE METS PAS de Markdown (gras **, titres ##) sur les mots-clés comme "TITRE_FICHE:", "QUESTION:", etc. Écris-les simplement.
                     TITRE_FICHE: [Titre]
                     
                     ===NOUVEL_EXERCICE===
